@@ -5,73 +5,68 @@
 # Created Date: 3/5/23
 # --------------------------------------------------------------------------- #
 # ** Description **
+""""""
 
-"""
-
-"""
-
+# Standard Library Imports
 # --------------------------------------------------------------------------- #
 # ** Required libraries **
 from abc import ABC, abstractmethod
-from typing import List, Tuple, Optional, Union, Dict
+from typing import Dict, List, Optional, Tuple, Union
+
+# Third Party Imports
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-import pyarrow.compute as pc
-from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, roc_curve
 from sklearn.preprocessing import StandardScaler
 
 
 class Model(ABC):
-    """
-    The Model interface defines the methods that must be implemented by any concrete
-    class that aims to detect and measure concept drift using adversarial models. The
-    module is designed to be flexible and adaptable to different use cases and machine
-    learning models. It utilizes the `strategy design pattern` to allow users to
-    switch between different machine learning models and algorithms in real-time,
-    without modifying the underlying code. This is achieved by implementing the
-    `Adversarial Model Interface`, which defines a set of methods and attributes that
-    all concrete implementations of the module must adhere.
+    """The Model interface defines the methods that must be implemented by any
+    concrete class that aims to detect and measure concept drift using
+    adversarial models.
+
+    The module is designed to be flexible and adaptable to different use
+    cases and machine learning models. It utilizes the `strategy design
+    pattern` to allow users to switch between different machine learning
+    models and algorithms in real-time, without modifying the underlying
+    code. This is achieved by implementing the `Adversarial Model
+    Interface`, which defines a set of methods and attributes that all
+    concrete implementations of the module must adhere.
     """
 
     @abstractmethod
     def preprocess(
-            self, data_train: pd.DataFrame, data_test: pd.DataFrame, features: List[str]
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Preprocesses the input data.
-        """
+        self, data: pd.DataFrame, target: str
+    ) -> Tuple[pd.DataFrame, pd.Series]:
+        """Preprocesses the input data."""
         ...
 
     @abstractmethod
     def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
-        """
-        Fits the adversarial model to the preprocessed features and `adversarial labels`.
-        """
+        """Fits the adversarial model to the preprocessed features and
+        `adversarial labels`."""
         ...
 
     @abstractmethod
     def predict(self, X: pd.DataFrame) -> np.array:
-        """
-        Predicts the `adversarial labels` for the given input features.
-        """
+        """Predicts the `adversarial labels` for the given input features."""
         ...
 
     @property
     @abstractmethod
     def model(self) -> Union[LogisticRegression, RandomForestClassifier]:
-        """
-        Returns the feature importances for the trained adversarial model.
-        """
+        """Returns the feature importances for the trained adversarial
+        model."""
         ...
 
 
 class LogisticRegressionModel(Model):
-    """
-    Implementation of the AdversarialModel interface using a logistic regression.
+    """Implementation of the AdversarialModel interface using a logistic
+    regression.
 
     Parameters
     ----------
@@ -89,7 +84,8 @@ class LogisticRegressionModel(Model):
 
     Methods
     -------
-    preprocess(data_train: pyarrow.Table, data_test: pyarrow.Table, features: List[str]) -> Tuple[pa.Table, pa.Table]
+    preprocess(data_train: pyarrow.Table, data_test: pyarrow.Table, features: List[str])
+    -> Tuple[pa.Table, pa.Table]
         Preprocesses the input data.
 
     fit(X: pandas.DaraFrame, y: pandas.Series) -> None
@@ -101,19 +97,22 @@ class LogisticRegressionModel(Model):
     feature_importances(X_columns: List[str]) -> pandas.Series
         Calculates feature importances for the given data.
 
-    static scale_data(data_train: pyarrow.Table, data_test: pyarrow.Table, features: List[str]) -> Tuple[pyarrow.Table, pyarrow.Table]
-        Scales the data by subtracting the mean and dividing it by the standard deviation.
+    static scale_data(data_train: pyarrow.Table, data_test: pyarrow.Table, features:
+    List[str]) -> Tuple[pyarrow.Table, pyarrow.Table]
+        Scales the data by subtracting the mean and dividing it by the standard
+        deviation.
     """
 
     def __init__(self, *args, **kwargs):
         self.__model = LogisticRegression(*args, **kwargs)
         self.__scaler = StandardScaler()
 
-    def preprocess(self, data_train: pd.DataFrame, data_test: pd.DataFrame,
-                   features: List[str]) -> Tuple[pa.Table, pa.Table]:
-        """
-        Preprocesses the input data by scaling and selecting the specified features.
-        This method calls the static method `scale_data` to scale the data.
+    def preprocess(
+        self, data_train: pd.DataFrame, data_test: pd.DataFrame, features: List[str]
+    ) -> Tuple[pa.Table, pa.Table]:
+        """Preprocesses the input data by scaling and selecting the specified
+        features. This method calls the static method `scale_data` to scale the
+        data.
 
         Parameters
         -----------
@@ -121,7 +120,7 @@ class LogisticRegressionModel(Model):
           The training data as a PyArrow Table.
 
         data_test : pd.DataFrame
-                    The test data as a PyArrow Table.
+                    The tests data as a PyArrow Table.
 
         features : List[str]
                     The list of features to use in the model.
@@ -129,10 +128,10 @@ class LogisticRegressionModel(Model):
         Returns
         --------
         Tuple[pa.Table, pa.Table]
-          A tuple of the preprocessed training and test data.
+          A tuple of the preprocessed training and tests data.
         """
         X_train = data_train[features]
-        y_train = data_train[~[X_train]]
+        data_train[~X_train]
 
         data_test = data_test.select(features)
 
@@ -141,8 +140,7 @@ class LogisticRegressionModel(Model):
         return data_train, data_test
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
-        """
-        Fits the adversarial logistic regression model to the training data.
+        """Fits the adversarial logistic regression model to the training data.
 
         Parameters
         -----------
@@ -160,8 +158,7 @@ class LogisticRegressionModel(Model):
         self.__model.fit(X, y)
 
     def predict(self, X: pd.DataFrame) -> np.array:
-        """
-        Predicts the adversarial labels for the given input features.
+        """Predicts the adversarial labels for the given input features.
 
         Parameters
         -----------
@@ -179,8 +176,7 @@ class LogisticRegressionModel(Model):
 
     @property
     def model(self) -> LogisticRegression:
-        """
-        Returns the feature importances for the trained adversarial model.
+        """Returns the feature importances for the trained adversarial model.
 
         Parameters
         -----------
@@ -201,8 +197,8 @@ class LogisticRegressionModel(Model):
 
 
 class RandomForest(Model):
-    """
-    A concrete implementation of the AdversarialModel interface that uses a Random Forest classifier to detect and measure concept drift.
+    """A concrete implementation of the AdversarialModel interface that uses a
+    Random Forest classifier to detect and measure concept drift.
 
     Parameters
     ----------
@@ -214,8 +210,10 @@ class RandomForest(Model):
 
     Methods
     --------
-    preprocess(self, data_train: pa.Table, data_test: pa.Table, features: List[str]) -> Tuple[pa.Table, pa.Table]
-        Preprocesses the training and test data by selecting the features and converts it to Pandas DataFrames.
+    preprocess(self, data_train: pa.Table, data_test: pa.Table, features: List[str])
+    -> Tuple[pa.Table, pa.Table]
+        Preprocesses the training and tests data by selecting the features and converts
+        it to Pandas DataFrames.
 
     fit(self, X: pd.DataFrame, y: pd.Series) -> None
         Fits the Random Forest model to the training data.
@@ -231,10 +229,10 @@ class RandomForest(Model):
         self.__model = RandomForestClassifier(*args, **kwargs)
 
     def preprocess(
-            self, data_train: pa.Table, data_test: pa.Table, features: List[str]
+        self, data_train: pa.Table, data_test: pa.Table, features: List[str]
     ) -> Tuple[pa.Table, pa.Table]:
-        """
-        Preprocesses the training and test data by scaling and encoding the specified features.
+        """Preprocesses the training and tests data by scaling and encoding the
+        specified features.
 
         Parameters
         -----------
@@ -242,7 +240,7 @@ class RandomForest(Model):
             The training data to preprocess.
 
         data_test : pa.Table
-            The test data to preprocess.
+            The tests data to preprocess.
 
         features : List[str]
             The list of feature column names to preprocess.
@@ -250,7 +248,7 @@ class RandomForest(Model):
         Returns
         --------
         Tuple[pa.Table, pa.Table]
-            A tuple containing the preprocessed training and test data.
+            A tuple containing the preprocessed training and tests data.
         """
         data_train = data_train.select(features)
         data_test = data_test.select(features)
@@ -258,8 +256,7 @@ class RandomForest(Model):
         return data_train, data_test
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
-        """
-        Fits the adversarial model on the training data.
+        """Fits the adversarial model on the training data.
 
         Parameters
         -----------
@@ -277,8 +274,7 @@ class RandomForest(Model):
         self.__model.fit(X, y)
 
     def predict(self, X: pd.DataFrame) -> np.array:
-        """
-        Predicts the adversarial labels for the given input features.
+        """Predicts the adversarial labels for the given input features.
 
         Parameters
         -----------
@@ -296,8 +292,7 @@ class RandomForest(Model):
 
     @property
     def model(self, X_columns: list) -> pd.Series:
-        """
-        Returns the feature importances for the trained adversarial model.
+        """Returns the feature importances for the trained adversarial model.
 
         Parameters
         -----------
@@ -316,28 +311,30 @@ class RandomForest(Model):
         return feat_imp
 
 
-# %% ../notebooks/05_adversarial_model.ipynb 32
-class DriftMonitor:
-    """
-    Monitors the data for concept drift by comparing the performance of the model on train and test data.
-    If drift is detected, the provided adversarial model is used to detect and measure the drift.
+class Pipeline:
+    """Monitors the data for concept drift by comparing the performance of the
+    model on train and tests data. If drift is detected, the provided
+    adversarial model is used to detect and measure the drift.
 
     Parameters
     ----------
     algorithm : Model
-        An object implementing the AdversarialModel interface to detect and measure the concept drift.
+        An object implementing the AdversarialModel interface to detect and measure the
+        concept drift.
 
     data_train : Union[pa.Table, pd.DataFrame]
         The training data used to train the model and monitor for concept drift.
 
     data_test : Union[pa.Table, pd.DataFrame]
-        The test data used to monitor for concept drift.
+        The tests data used to monitor for concept drift.
 
     features : Optional[List[str]] (default=None)
-        The list of feature names to use in the analysis. If None, all columns except the target_column are used.
+        The list of feature names to use in the analysis. If None, all columns except
+        the target_column are used.
 
     target_column : Optional[str] (default=None)
-        The name of the target column in the data. If None, is assumed the data comes from unsupervised learning.
+        The name of the target column in the data. If None, is assumed the data comes
+        from unsupervised learning.
 
     shuffle : Optional[bool] (default=False)
         If True, the data is shuffled before training the `Adversarial Model`.
@@ -345,10 +342,12 @@ class DriftMonitor:
     Methods
     -------
     evaluate_drift(self) -> None
-        This method evaluates the concept drift using the adversarial model and prints the results.
+        This method evaluates the concept drift using the adversarial model and prints
+        the results.
 
     explain_drift(self) -> None
-        Calculates the feature importance for the trained adversarial model. The features with higher importance are likely to be responsible for the drift.
+        Calculates the feature importance for the trained adversarial model. The
+        features with higher importance are likely to be responsible for the drift.
 
     plot_roc_curve(self) -> None
         This method plots the ROC curve of the adversarial model using the testing data.
@@ -357,20 +356,21 @@ class DriftMonitor:
         This method checks if the parameters passed to the class are valid.
 
     private generate_adv_data(self) -> Tuple[pd.DataFrame, pd.Series]
-        This method generates the adversarial data for the training set and returns it as a tuple.
+        This method generates the adversarial data for the training set and returns it
+        as a tuple.
 
     private train(self, X: pd.DataFrame, y: pd.Series) -> None
         This method trains the adversarial model using the provided training data.
     """
 
     def __init__(
-            self,
-            algorithm: Model,
-            data_train: Union[pa.Table, pd.DataFrame],
-            data_test: Union[pa.Table, pd.DataFrame],
-            features: Optional[List[str]] = None,
-            target_column: Optional[str] = None,
-            shuffle: Optional[bool] = False,
+        self,
+        algorithm: Model,
+        data_train: Union[pa.Table, pd.DataFrame],
+        data_test: Union[pa.Table, pd.DataFrame],
+        features: Optional[List[str]] = None,
+        target_column: Optional[str] = None,
+        shuffle: Optional[bool] = False,
     ):
         self.__algorithm = algorithm
         self.__data_train = data_train
@@ -385,14 +385,15 @@ class DriftMonitor:
 
         self.__check_parameters()
 
-    def evaluate_drift(self) -> None:
-        """
-        Evaluates drift by comparing the AUC of ROC curves of original and adversarial test datasets.
+    def training_loop(self) -> None:
+        """Evaluates drift by comparing the AUC of ROC curves of original and
+        adversarial tests datasets.
 
         Returns
         --------
         None
         """
+
         self.__data_train, self.__data_test = self.__algorithm.preprocess(
             self.__data_train, self.__data_test, self.__features
         )
@@ -407,8 +408,9 @@ class DriftMonitor:
         }
 
     def explain_drift(self, n_features: Optional[int] = None) -> None:
-        """
-        Calculates the feature importance for the trained adversarial model and prints the most important features. These features are likely to be responsible for the detected drift.
+        """Calculates the feature importance for the trained adversarial model
+        and prints the most important features. These features are likely to be
+        responsible for the detected drift.
 
         Parameters
         ----------
@@ -428,9 +430,7 @@ class DriftMonitor:
         plt.show(block=False)
 
     def plot_roc_curve(self) -> None:
-        """
-        Plots the ROC curve for the adversarial data.
-        """
+        """Plots the ROC curve for the adversarial data."""
         y_pred = self.__metrics.get("y_pred_proba")[:, 1]
         roc_auc = self.__metrics.get("roc_auc")
         fpr, tpr, threshold = roc_curve(self.__y, y_pred)
@@ -445,8 +445,8 @@ class DriftMonitor:
         plt.show(block=False)
 
     def __check_parameters(self) -> None:
-        """
-        Checks the validity of the input parameters for the DriftMonitor instance.
+        """Checks the validity of the input parameters for the DriftMonitor
+        instance.
 
         Returns
         --------
@@ -470,13 +470,12 @@ class DriftMonitor:
             self.__features.remove(self.__target)
 
     def __generate_adv_data(self) -> Tuple[pd.DataFrame, pd.Series]:
-        """
-        Generates adversarial data by adding adversarial labels.
+        """Generates adversarial data by adding adversarial labels.
 
         Returns
         --------
         Tuple[pd.DataFrame, pd.Series]
-          Tuple containing adversarial test data features and adversarial labels.
+          Tuple containing adversarial tests data features and adversarial labels.
         """
 
         zero_array = pa.array([0] * len(self.__data_train), type=pa.uint8())
@@ -500,8 +499,7 @@ class DriftMonitor:
         return X, y
 
     def __train(self, X: pd.DataFrame, y: pd.Series) -> None:
-        """
-        Trains the adversarial model on the input training data.
+        """Trains the adversarial model on the input training data.
 
         Parameters
         ----------
