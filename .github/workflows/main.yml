@@ -9,6 +9,11 @@ jobs:
     timeout-minutes: 15
 
     steps:
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+
       - name: Checkout repository code
         uses: actions/checkout@v3
 
@@ -17,9 +22,11 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements_dev.txt ]; then pip install -r requirements_dev.txt; fi
 
-      - name: Lint with ruff
+      - name: Code quality checks
         run: |
-          ruff src/
+          isort --check-only .
+          black --check .
+          ruff check .
 
       - name: Test with pytest
         run: |
