@@ -25,16 +25,25 @@ __all__ = ["extract_data", "transform_data", "load_data"]
 def extract_data(
     dataset_id: Union[str, Path], data_home: Union[str, Path]
 ) -> Tuple[DataFrame, Series]:
+    """
+
+    Parameters
+    ----------
+    dataset_id : Union[str, Path]
+    data_home : Union[str, Path]
+
+    Returns
+    -------
+    Tuple[DataFrame, Series]
+
+    """
     data, target = fetch_openml(
         dataset_id, cache=False, data_home=data_home, return_X_y=True, as_frame=True
     )
     return data, target
 
 
-def transform_data(
-    data: DataFrame,
-    target: Series,
-) -> DataFrame:
+def transform_data(data: DataFrame, target: Series) -> DataFrame:
     target = target.astype(uint8)
     data = concat([data, target], axis=1)
     return data

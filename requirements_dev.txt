@@ -2,6 +2,8 @@
 
 ruff
 black
+black[jupyter]
 isort
 docformatter
 pytest
+pyyaml

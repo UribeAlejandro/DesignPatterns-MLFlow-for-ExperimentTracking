@@ -1,5 +1,5 @@
 ## Other
-data/openml
+data/openml/
 *.csv
 *.parquet
 
