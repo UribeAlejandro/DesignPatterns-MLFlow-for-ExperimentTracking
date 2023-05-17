@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pickle
-import warnings
 from abc import ABC, abstractmethod
 from typing import List, Tuple
 
@@ -15,13 +14,10 @@ from tensorflow.python.keras import Input
 from tensorflow.python.keras.layers import Dense, Dropout
 from tensorflow.python.keras.models import Sequential
 
-from src.constants import RANDOM_STATE
-from src.training.fine_tuning import fine_tuner_bayes, fine_tuner_randomized
+from src.constants import MLFLOW_TRACKING_URI, MODEL_PATH, RANDOM_STATE, SCALER_FOLDER, SCALER_PATH
+from src.training.fine_tuning import fine_tune
 
-warnings.simplefilter("ignore")
-warnings.simplefilter("ignore")
-
-mlflow.set_tracking_uri("sqlite:///data/mlflow/database/mlruns.db")
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
 __all__ = [
     "Model",
@@ -83,14 +79,7 @@ class Model(ABC):
         ...
 
     @abstractmethod
-    def fit(
-        self,
-        X_train: pd.DataFrame,
-        X_test: pd.DataFrame,
-        y_train: pd.Series,
-        y_test: pd.Series,
-        **kwargs,
-    ) -> None:
+    def fit(self, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, **kwargs) -> None:
         """Fits the model on the given data.
 
         Parameters
@@ -164,7 +153,6 @@ class LogisticRegressionModel(Model):
 
     def __init__(self, *args, **kwargs):
         self.__scaler = StandardScaler()
-        self.__path_scaler = "data/mlflow/scaler/scaler.pkl"
         self.__model = LogisticRegression(random_state=RANDOM_STATE, n_jobs=-1, *args, **kwargs)
 
     def preprocess(
@@ -180,41 +168,11 @@ class LogisticRegressionModel(Model):
 
         return X_train_scaled, X_test_scaled, y_train, y_test
 
-    def fit(
-        self,
-        X_train: pd.DataFrame,
-        X_test: pd.DataFrame,
-        y_train: pd.Series,
-        y_test: pd.Series,
-        **kwargs,
-    ) -> None:
-        kwargs_fit = kwargs.get("fit", {})
-        kwargs_fine_tune = kwargs.get("fine_tune", {})
-
-        fine_tune_flag = kwargs_fine_tune.get("flag", False)
-        param_grid = kwargs_fine_tune.get("param_grid", {})
-
-        eval_data = X_test.copy()
-        eval_data["target"] = y_test.copy()
-
+    def fit(self, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, **kwargs) -> None:
         mlflow.sklearn.autolog()
         with mlflow.start_run() as run:  # noqa
-            if fine_tune_flag:
-                print("Here")
-                model = fine_tuner_randomized(self.__model, X_train, y_train, param_grid)
-                self.__model = model.best_estimator_
-            else:
-                self.__model.fit(X_train, y_train, **kwargs_fit)
-
-            model_info = mlflow.sklearn.log_model(self.__model, "model")
-            mlflow.evaluate(
-                model_info.model_uri,
-                data=eval_data,
-                targets="target",
-                model_type="classifier",
-                evaluators=["default"],
-            )
-            mlflow.log_artifact(self.__path_scaler, "scaler")
+            self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, **kwargs)
+            mlflow.log_artifact(SCALER_PATH, SCALER_FOLDER)
 
     def __scale_data(self, X: pd.DataFrame) -> pd.DataFrame:
         """Z-scales data.
@@ -231,7 +189,7 @@ class LogisticRegressionModel(Model):
         """
         X = self.__scaler.fit_transform(X)
 
-        with open(self.__path_scaler, "wb") as file:
+        with open(SCALER_PATH, "wb") as file:
             pickle.dump(self.__scaler, file)
 
         return X
@@ -293,39 +251,10 @@ class RandomForestModel(Model):
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
         return X_train, X_test, y_train, y_test
 
-    def fit(
-        self,
-        X_train: pd.DataFrame,
-        X_test: pd.DataFrame,
-        y_train: pd.Series,
-        y_test: pd.Series,
-        **kwargs,
-    ) -> None:
-        fine_tune = kwargs.get("fine_tune", False)
-        param_grid = kwargs.get("param_grid")
-        kwargs_fit = kwargs.get("fit")
-
-        eval_data = X_test
-        eval_data["target"] = y_test
-
+    def fit(self, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, **kwargs) -> None:
         mlflow.sklearn.autolog()
         with mlflow.start_run() as run:  # noqa
-            if fine_tune:
-                model = fine_tuner_bayes(self.__model, X_train, y_train, param_grid)
-                self.__model = model.best_estimator_
-
-            else:
-                self.__model.fit(X_train, y_train, **kwargs_fit)
-
-            mlflow.shap.log_explanation(self.__model.predict, X_train)
-            model_info = mlflow.sklearn.log_model(self.__model, "model")
-            mlflow.evaluate(
-                model_info.model_uri,
-                eval_data,
-                targets="target",
-                model_type="classifier",
-                evaluators=["default"],
-            )
+            self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, **kwargs)
 
     @property
     def model(self) -> RandomForestClassifier:
@@ -381,18 +310,11 @@ class NeuralNetworkModel(Model):
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
         return X_train, X_test, y_train, y_test
 
-    def fit(
-        self,
-        X_train: pd.DataFrame,
-        X_test: pd.DataFrame,
-        y_train: pd.Series,
-        y_test: pd.Series,
-        **kwargs,
-    ) -> None:
+    def fit(self, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, **kwargs) -> None:
         mlflow.tensorflow.autolog()
         with mlflow.start_run() as run:  # noqa
             self.__model.fit(X_train, y_train, validation_data=(X_test, y_test), **kwargs)
-            mlflow.shap.log_explanation(self.__model.predict, X_train)
+            # mlflow.shap.log_explanation(self.__model.predict, X_train)
 
     @staticmethod
     def __create_model(input_dim: Tuple[int, int], layers_units: List[int], activation: str) -> Sequential:
@@ -490,39 +412,71 @@ class LightgbmModel(Model):
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
         return X_train, X_test, y_train, y_test
 
-    def fit(
-        self,
-        X_train: pd.DataFrame,
-        X_test: pd.DataFrame,
-        y_train: pd.Series,
-        y_test: pd.Series,
-        **kwargs,
-    ) -> None:
-        fine_tune = kwargs.get("fine_tune", False)
-        param_grid = kwargs.get("param_grid")
-
-        eval_data = X_test
-        eval_data["target"] = y_test
-
-        mlflow.lightgbm.autolog()
+    def fit(self, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, **kwargs) -> None:
+        mlflow.lightgbm.autolog(nested=True)
         with mlflow.start_run() as run:  # noqa
-            if fine_tune:
-                model = fine_tuner_randomized(self.__model, X_train, y_train, param_grid)
-                self.__model = model.best_estimator_
-
-            else:
-                self.__model.fit(X_train, y_train)
-
-            mlflow.shap.log_explanation(self.__model.predict, X_train)
-            model_info = mlflow.sklearn.log_model(self.__model, "model")
-            mlflow.evaluate(
-                model_info.model_uri,
-                eval_data,
-                targets="target",
-                model_type="classifier",
-                evaluators=["default"],
-            )
+            self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, **kwargs)
 
     @property
     def model(self) -> LGBMClassifier:
         return self.__model
+
+
+def _sklearn_loop(
+    model: __all__, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, **kwargs
+) -> Model:
+    """Trains a model using the scikit-learn API.
+
+    Parameters
+    ----------
+    model : Model
+        The model to train.
+
+    X_train : pd.DataFrame
+        The training data.
+
+    X_test : pd.DataFrame
+        The test data.
+
+    y_train : pd.Series
+        The target values for the training data.
+
+    y_test : pd.Series
+        The target values for the test data.
+
+    **kwargs
+        Additional keyword arguments to pass to the `fit` method.
+
+    Returns
+    -------
+    Model
+        The trained model.
+    """
+
+    kwargs_fit = kwargs.get("fit", {})
+    kwargs_fine_tune = kwargs.get("fine_tune", {})
+
+    fine_tune_flag = kwargs_fine_tune.get("flag", False)
+    param_grid = kwargs_fine_tune.get("param_grid", {})
+
+    eval_data = X_test.copy()
+    eval_data["target"] = y_test.copy()
+    if fine_tune_flag:
+        strategy = kwargs_fine_tune.get("strategy", "randomized")
+        model = fine_tune(model, X_train, y_train, param_grid, strategy)
+        model = model.best_estimator_
+    else:
+        model.fit(X_train, y_train, **kwargs_fit)
+
+    model_info = mlflow.sklearn.log_model(model, MODEL_PATH)
+    mlflow.evaluate(
+        model_info.model_uri,
+        data=eval_data,
+        targets="target",
+        model_type="classifier",
+        evaluators="default",
+        # evaluator_config={"log_model_explainability": False}
+        evaluator_config={"explainability_algorithm": "kernel"},
+    )
+
+    return model

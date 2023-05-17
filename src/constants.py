@@ -1,11 +1,11 @@
-from enum import Enum
+import os
 
 CV = 5
 RANDOM_STATE = 42
+MLFLOW_PORT = os.getenv("MLFLOW_PORT")
+MLFLOW_TRACKING_URI = f"http://127.0.0.1:{MLFLOW_PORT}"
+MLFLOW_ARTIFACT_ROOT = os.getenv("MLFLOW_ARTIFACT_ROOT")
 
-
-class ModelName(Enum):
-    LogisticRegressionModel = "LogisticRegressionModel"
-    LightgbmModel = "LightgbmModel"
-    RandomForestModel = "RandomForestModel"
-    NeuralNetworkModel = "NeuralNetworkModel"
+MODEL_PATH = "model"
+SCALER_FOLDER = "scaler"
+SCALER_PATH = f"{MLFLOW_ARTIFACT_ROOT}/scaler.pkl"
