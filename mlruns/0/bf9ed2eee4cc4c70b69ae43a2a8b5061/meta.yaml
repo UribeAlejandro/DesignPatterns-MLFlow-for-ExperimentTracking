@@ -1,0 +1,16 @@
+artifact_uri: mlflow-artifacts:/0/bf9ed2eee4cc4c70b69ae43a2a8b5061/artifacts
+deleted_time: 1684287599019
+end_time: 1684286709793
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: deleted
+run_id: bf9ed2eee4cc4c70b69ae43a2a8b5061
+run_name: shivering-stag-568
+run_uuid: bf9ed2eee4cc4c70b69ae43a2a8b5061
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1684286706414
+status: 4
+tags: []
+user_id: uribe

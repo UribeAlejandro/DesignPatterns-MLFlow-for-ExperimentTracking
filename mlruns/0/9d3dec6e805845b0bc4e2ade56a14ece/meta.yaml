@@ -1,0 +1,16 @@
+artifact_uri: mlflow-artifacts:/0/9d3dec6e805845b0bc4e2ade56a14ece/artifacts
+deleted_time: 1684286238208
+end_time: 1684285978236
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: deleted
+run_id: 9d3dec6e805845b0bc4e2ade56a14ece
+run_name: adaptable-doe-613
+run_uuid: 9d3dec6e805845b0bc4e2ade56a14ece
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1684285974950
+status: 4
+tags: []
+user_id: uribe

@@ -1,62 +1,127 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# --------------------------------------------------------------------------- #
-# Created By: Uribe
-# Created Date: 3/5/23
-# --------------------------------------------------------------------------- #
-# ** Description **
-""""""
+from __future__ import annotations
 
-# Standard Library Imports
 import pickle
-
-# --------------------------------------------------------------------------- #
-# ** Required libraries **
+import warnings
 from abc import ABC, abstractmethod
-from typing import Tuple, Union
+from typing import List, Tuple
 
-# Third Party Imports
 import mlflow
 import pandas as pd
 from lightgbm import LGBMClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
-from tensorflow.python.keras.layers import Dense, Input
+from tensorflow.python.keras import Input
+from tensorflow.python.keras.layers import Dense, Dropout
 from tensorflow.python.keras.models import Sequential
 
-__all__ = ["LogisticRegressionModel", "RandomForestModel", "NeuralNetwork", "LightGBM"]
+from src.constants import RANDOM_STATE
+from src.training.fine_tuning import fine_tuner_bayes, fine_tuner_randomized
+
+warnings.simplefilter("ignore")
+warnings.simplefilter("ignore")
+
+mlflow.set_tracking_uri("sqlite:///data/mlflow/database/mlruns.db")
+
+__all__ = [
+    "Model",
+    "LogisticRegressionModel",
+    "RandomForestModel",
+    "NeuralNetworkModel",
+    "LightgbmModel",
+]
 
 
 class Model(ABC):
-    """The Model interface defines the methods that must be implemented by any
-    concrete class.
+    """An interface for machine learning models.
 
-    The module is designed to be flexible and adaptable to different use
-    cases and machine learning models. It utilizes the `strategy design
-    pattern` to allow users to switch between different machine learning
-    models and algorithms in real-time, without modifying the underlying
-    code. This is achieved by implementing the `Model Interface`, which
-    defines a set of methods and attributes that all concrete
-    implementations of the module must adhere.
+    Methods
+    ----------------
+    preprocess(X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series,
+    y_test: pd.Series) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+        Abstract method for preprocessing the data.
+
+    fit(X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series,
+    y_test: pd.Series, **kwargs) -> None:
+        Abstract method for fitting the model on the given data.
+
+    Attributes
+    ----------
+    model: Model
+        The underlying model.
     """
 
     @abstractmethod
     def preprocess(
-        self, X: pd.DataFrame, y: pd.Series
-    ) -> Tuple[pd.DataFrame, pd.Series]:
-        """Preprocesses the input data."""
+        self,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+        """Preprocess the data.
+
+        Parameters
+        ----------
+        X_train : pd.DataFrame
+            The training data.
+
+        X_test : pd.DataFrame
+            The test data.
+
+        y_train : pd.Series
+            The target values for the training data.
+
+        y_test : pd.Series
+            The target values for the test data.
+
+        Returns
+        -------
+        Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]
+            The preprocessed training data, test data, training target values, and test target values.
+        """
         ...
 
     @abstractmethod
-    def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> None:
-        """Fits the model on the given data."""
+    def fit(
+        self,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series,
+        **kwargs,
+    ) -> None:
+        """Fits the model on the given data.
+
+        Parameters
+        ----------
+        X_train : pd.DataFrame
+            The training data.
+
+        X_test : pd.DataFrame
+            The test data.
+
+        y_train : pd.Series
+            The target values for the training data.
+
+        y_test : pd.Series
+            The target values for the test data.
+
+        **kwargs
+            Additional keyword arguments to pass to the fitting algorithm.
+        """
         ...
 
     @property
     @abstractmethod
-    def model(self) -> Union[LogisticRegression, RandomForestClassifier]:
-        """Returns the underlying model."""
+    def model(self) -> Model:
+        """Returns the underlying model.
+
+        Returns
+        -------
+        Model
+            The underlying model.
+        """
         ...
 
 
@@ -91,62 +156,65 @@ class LogisticRegressionModel(Model):
     predict(X: pyarrow.Table) -> np.array
         Predicts `adversarial labels` for the given data.
 
-    static scale_data(data_train: pyarrow.Table, data_test: pyarrow.Table, features:
+    private static scale_data(data_train: pyarrow.Table, data_test: pyarrow.Table, features:
     List[str]) -> Tuple[pyarrow.Table, pyarrow.Table]
         Scales the data by subtracting the mean and dividing it by the standard
         deviation.
     """
 
     def __init__(self, *args, **kwargs):
-        self.__model = LogisticRegression(*args, **kwargs)
         self.__scaler = StandardScaler()
-        self.__path_scaler = "scaler/scaler.pkl"
+        self.__path_scaler = "data/mlflow/scaler/scaler.pkl"
+        self.__model = LogisticRegression(random_state=RANDOM_STATE, n_jobs=-1, *args, **kwargs)
 
     def preprocess(
-        self, X: pd.DataFrame, y: pd.Series
-    ) -> Tuple[pd.DataFrame, pd.Series]:
-        """Preprocesses the input data by scaling and selecting the specified
-        features. This method calls the static method `scale_data` to scale the
-        data.
+        self,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+        X_train_scaled = pd.DataFrame(self.__scale_data(X_train), columns=X_train.columns)
 
-        Parameters
-        -----------
-        X : pd.DataFrame
-            The training data as a PyArrow Table.
+        X_test_scaled = pd.DataFrame(self.__scaler.transform(X_test), columns=X_test.columns)
 
-        y : pd.Series
-            The list of features to use in the model.
+        return X_train_scaled, X_test_scaled, y_train, y_test
 
-        Returns
-        --------
-        Tuple[pd.DataFrame, pd.Series]
-          A tuple of the preprocessed data.
-        """
-        X = self.__scale_data(X)
+    def fit(
+        self,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series,
+        **kwargs,
+    ) -> None:
+        kwargs_fit = kwargs.get("fit", {})
+        kwargs_fine_tune = kwargs.get("fine_tune", {})
 
-        return X, y
+        fine_tune_flag = kwargs_fine_tune.get("flag", False)
+        param_grid = kwargs_fine_tune.get("param_grid", {})
 
-    def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> None:
-        """Fits the model on the given data.
+        eval_data = X_test.copy()
+        eval_data["target"] = y_test.copy()
 
-        Parameters
-        -----------
-        X : pd.DataFrame
-            The input features as a Pandas DataFrame.
-
-        y : pd.Series
-            The target variable as a Pandas Series.
-
-        Returns
-        --------
-        None
-          None
-        """
         mlflow.sklearn.autolog()
-
         with mlflow.start_run() as run:  # noqa
-            self.__model.fit(X, y)
-            mlflow.log_artifact(self.__path_scaler)
+            if fine_tune_flag:
+                print("Here")
+                model = fine_tuner_randomized(self.__model, X_train, y_train, param_grid)
+                self.__model = model.best_estimator_
+            else:
+                self.__model.fit(X_train, y_train, **kwargs_fit)
+
+            model_info = mlflow.sklearn.log_model(self.__model, "model")
+            mlflow.evaluate(
+                model_info.model_uri,
+                data=eval_data,
+                targets="target",
+                model_type="classifier",
+                evaluators=["default"],
+            )
+            mlflow.log_artifact(self.__path_scaler, "scaler")
 
     def __scale_data(self, X: pd.DataFrame) -> pd.DataFrame:
         """Z-scales data.
@@ -170,14 +238,6 @@ class LogisticRegressionModel(Model):
 
     @property
     def model(self) -> LogisticRegression:
-        """Returns the underlying model.
-
-        Returns
-        --------
-        LogisticRegression
-          Underlying model.
-        """
-
         return self.__model
 
     @property
@@ -222,64 +282,57 @@ class RandomForestModel(Model):
     """
 
     def __init__(self, *args, **kwargs):
-        self.__model = RandomForestClassifier(*args, **kwargs)
+        self.__model = RandomForestClassifier(random_state=RANDOM_STATE, n_jobs=-1, *args, **kwargs)
 
     def preprocess(
-        self, X: pd.DataFrame, y: pd.Series
-    ) -> Tuple[pd.DataFrame, pd.Series]:
-        """Preprocesses the training and tests data by scaling and encoding the
-        specified features.
+        self,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+        return X_train, X_test, y_train, y_test
 
-        Parameters
-        -----------
-        X : pd.DataFrame
-            The training data to preprocess.
+    def fit(
+        self,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series,
+        **kwargs,
+    ) -> None:
+        fine_tune = kwargs.get("fine_tune", False)
+        param_grid = kwargs.get("param_grid")
+        kwargs_fit = kwargs.get("fit")
 
-        y : pd.Series
-            The list of feature column names to preprocess.
+        eval_data = X_test
+        eval_data["target"] = y_test
 
-        Returns
-        --------
-        Tuple[pd.DataFrame, pd.DataFrame]
-            A tuple containing the preprocessed training and tests data.
-        """
-
-        return X, y
-
-    def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> None:
-        """Fits the adversarial model on the training data.
-
-        Parameters
-        -----------
-        X : pd.DataFrame
-            The training features to fit the adversarial model on.
-
-        y : pd.Series
-            The corresponding labels to fit the adversarial model on.
-
-        Returns
-        --------
-        None
-            None
-        """
         mlflow.sklearn.autolog()
-
         with mlflow.start_run() as run:  # noqa
-            self.__model.fit(X, y, **kwargs)
+            if fine_tune:
+                model = fine_tuner_bayes(self.__model, X_train, y_train, param_grid)
+                self.__model = model.best_estimator_
+
+            else:
+                self.__model.fit(X_train, y_train, **kwargs_fit)
+
+            mlflow.shap.log_explanation(self.__model.predict, X_train)
+            model_info = mlflow.sklearn.log_model(self.__model, "model")
+            mlflow.evaluate(
+                model_info.model_uri,
+                eval_data,
+                targets="target",
+                model_type="classifier",
+                evaluators=["default"],
+            )
 
     @property
     def model(self) -> RandomForestClassifier:
-        """Returns the underlying model.
-
-        Returns
-        --------
-        RandomForestClassifier
-          Underlying model.
-        """
         return self.__model
 
 
-class NeuralNetwork(Model):
+class NeuralNetworkModel(Model):
     """A concrete implementation of the Model interface that uses a Neural
     Network for classification.
 
@@ -311,70 +364,95 @@ class NeuralNetwork(Model):
     """
 
     def __int__(self, *args, **kwargs):
-        self.__model = self.__create_model(*args, **kwargs)
+        kwargs_creation = kwargs.get("creation")
+        kwargs_compilation = kwargs.get("compilation")
+
+        __model = self.__create_model(**kwargs_creation)
+        __model = self.__compile_model(__model, **kwargs_compilation)
+
+        self.__model = __model
 
     def preprocess(
-        self, X: pd.DataFrame, y: pd.Series
-    ) -> Tuple[pd.DataFrame, pd.Series]:
-        """Preprocesses the input data by scaling and selecting the specified
-        features. This method calls the static method `scale_data` to scale the
-        data.
+        self,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+        return X_train, X_test, y_train, y_test
 
-        Parameters
-        -----------
-        X : pd.DataFrame
-            The training data as a PyArrow Table.
-
-        y : pd.Series
-            The list of features to use in the model.
-
-        Returns
-        --------
-        Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]
-          A tuple of the preprocessed training and test data.
-        """
-
-        return X, y
-
-    def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> None:
+    def fit(
+        self,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series,
+        **kwargs,
+    ) -> None:
         mlflow.tensorflow.autolog()
         with mlflow.start_run() as run:  # noqa
-            self.__model.fit(X, y, **kwargs)
+            self.__model.fit(X_train, y_train, validation_data=(X_test, y_test), **kwargs)
+            mlflow.shap.log_explanation(self.__model.predict, X_train)
 
     @staticmethod
-    def __create_model(*args, **kwargs):
-        input_shape = kwargs.get("input_shape")
-        optimizer = kwargs.get("optimizer", "adam")
-        loss = kwargs.get("loss", "binary_crossentropy")
-        metrics = kwargs.get("metrics", ["accuracy", "f1_score"])
+    def __create_model(input_dim: Tuple[int, int], layers_units: List[int], activation: str) -> Sequential:
+        """Creates a sequential model.
 
-        input_layer = [Input(shape=input_shape)]
-        hidden_layers = [
-            Dense(dim_layer, kernel_initializer=kernel_init, activation=activation)
-            for dim_layer, kernel_init, activation in args
-        ]
-        output_layer = [Dense(1, activation="sigmoid")]
+        Parameters
+        ----------
+        input_dim : Tuple[int, int]
+            The input dimensions of the model.
 
-        layers = input_layer + hidden_layers + output_layer
+        layers_units : List[int]
+            The number of units in each layer of the model.
 
-        model = Sequential(layers)
-        model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
-
-        return model
-
-    @property
-    def model(self) -> Sequential:
-        """Returns the underlying model.
+        activation : str
+            The activation function to use for each layer of the model.
 
         Returns
         -------
         Sequential
-            Underlying model.
+            The created model.
         """
+        model = Sequential()
+        model.add(Input(shape=input_dim))
+
+        for units in layers_units:
+            model.add(Dense(units, activation=activation))
+
+        model.add(Dropout(0.2))
+        model.add(Dense(1, activation="sigmoid"))
+        return model
+
+    @staticmethod
+    def __compile_model(model: Sequential, *args, **kwargs) -> Sequential:
+        """Compiles a model.
+
+        Parameters
+        ----------
+        model : Sequential
+            The model to compile.
+
+        *args
+            Additional arguments to pass to the `compile` method.
+
+        **kwargs
+            Additional keyword arguments to pass to the `compile` method.
+
+        Returns
+        -------
+        Sequential
+            The compiled model.
+        """
+        model.compile(*args, **kwargs)
+        return model
+
+    @property
+    def model(self) -> Sequential:
         return self.__model
 
 
-class LightGBM(Model):
+class LightgbmModel(Model):
     """A concrete implementation of the Model interface that uses a LightGBM
     classifier.
 
@@ -401,42 +479,50 @@ class LightGBM(Model):
     """
 
     def __int__(self, *args, **kwargs):
-        self.__model = LGBMClassifier()
+        self.__model = LGBMClassifier(random_state=RANDOM_STATE, n_jobs=-1, *args, **kwargs)
 
     def preprocess(
-        self, X: pd.DataFrame, y: pd.Series
-    ) -> Tuple[pd.DataFrame, pd.Series]:
-        """Preprocesses the input data by scaling and selecting the specified
-        features. This method calls the static method `scale_data` to scale the
-        data.
+        self,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+        return X_train, X_test, y_train, y_test
 
-        Parameters
-        -----------
-        X : pd.DataFrame
-            The training data as a PyArrow Table.
+    def fit(
+        self,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series,
+        **kwargs,
+    ) -> None:
+        fine_tune = kwargs.get("fine_tune", False)
+        param_grid = kwargs.get("param_grid")
 
-        y : pd.Series
-            The list of features to use in the model.
+        eval_data = X_test
+        eval_data["target"] = y_test
 
-        Returns
-        --------
-        Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]
-          A tuple of the preprocessed training and test data.
-        """
-        return X, y
-
-    def fit(self, X: pd.DataFrame, y: pd.Series, **kwargs) -> None:
-        mlflow.tensorflow.autolog()
+        mlflow.lightgbm.autolog()
         with mlflow.start_run() as run:  # noqa
-            self.__model.fit(X, y)
+            if fine_tune:
+                model = fine_tuner_randomized(self.__model, X_train, y_train, param_grid)
+                self.__model = model.best_estimator_
+
+            else:
+                self.__model.fit(X_train, y_train)
+
+            mlflow.shap.log_explanation(self.__model.predict, X_train)
+            model_info = mlflow.sklearn.log_model(self.__model, "model")
+            mlflow.evaluate(
+                model_info.model_uri,
+                eval_data,
+                targets="target",
+                model_type="classifier",
+                evaluators=["default"],
+            )
 
     @property
     def model(self) -> LGBMClassifier:
-        """Returns the underlying model.
-
-        Returns
-        -------
-        LGBMClassifier
-            Underlying model.
-        """
         return self.__model

@@ -5,3 +5,5 @@ scikit-learn==1.2.2
 pyarrow==11.0.0
 pandas==2.0.1
 tensorflow==2.12.0
+scikit_optimize==0.9.0
+shap==0.41.0

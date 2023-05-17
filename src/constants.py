@@ -1,18 +1,11 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# --------------------------------------------------------------------------- #
-# Created By: Uribe
-# Created Date: 28/4/23
-# --------------------------------------------------------------------------- #
-# ** Description **
-""""""
+from enum import Enum
 
-# --------------------------------------------------------------------------- #
-# ** Required libraries **
+CV = 5
+RANDOM_STATE = 42
 
-# Standard Library Imports
-from pathlib import Path
 
-DATASET_ID = "higgs"
-DATA_LOCATION = "data"
-OUTPUT_PATH = Path(DATA_LOCATION, DATASET_ID).with_suffix(".parquet")
+class ModelName(Enum):
+    LogisticRegressionModel = "LogisticRegressionModel"
+    LightgbmModel = "LightgbmModel"
+    RandomForestModel = "RandomForestModel"
+    NeuralNetworkModel = "NeuralNetworkModel"

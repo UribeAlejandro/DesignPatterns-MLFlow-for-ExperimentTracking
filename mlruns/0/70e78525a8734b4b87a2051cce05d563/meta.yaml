@@ -1,0 +1,16 @@
+artifact_uri: mlflow-artifacts:/0/70e78525a8734b4b87a2051cce05d563/artifacts
+deleted_time: 1684286238221
+end_time: 1684285516380
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: deleted
+run_id: 70e78525a8734b4b87a2051cce05d563
+run_name: redolent-kit-286
+run_uuid: 70e78525a8734b4b87a2051cce05d563
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1684285516348
+status: 4
+tags: []
+user_id: uribe

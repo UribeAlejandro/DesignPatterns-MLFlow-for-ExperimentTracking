@@ -1,0 +1,16 @@
+artifact_uri: mlflow-artifacts:/0/780f152adc7e4c72bf6590ae4981b474/artifacts
+deleted_time: 1684287599018
+end_time: 1684286781878
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: deleted
+run_id: 780f152adc7e4c72bf6590ae4981b474
+run_name: rare-cub-460
+run_uuid: 780f152adc7e4c72bf6590ae4981b474
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1684286781130
+status: 4
+tags: []
+user_id: uribe

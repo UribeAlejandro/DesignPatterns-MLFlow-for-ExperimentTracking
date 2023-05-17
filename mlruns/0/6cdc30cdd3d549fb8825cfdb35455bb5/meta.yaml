@@ -1,0 +1,16 @@
+artifact_uri: mlflow-artifacts:/0/6cdc30cdd3d549fb8825cfdb35455bb5/artifacts
+deleted_time: 1684273151442
+end_time: 1684260533367
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: deleted
+run_id: 6cdc30cdd3d549fb8825cfdb35455bb5
+run_name: casual-yak-842
+run_uuid: 6cdc30cdd3d549fb8825cfdb35455bb5
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1684260533339
+status: 4
+tags: []
+user_id: uribe

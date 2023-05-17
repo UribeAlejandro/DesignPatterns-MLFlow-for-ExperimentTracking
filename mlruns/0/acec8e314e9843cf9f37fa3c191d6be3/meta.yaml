@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/acec8e314e9843cf9f37fa3c191d6be3/artifacts
+end_time: 1684288538978
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: acec8e314e9843cf9f37fa3c191d6be3
+run_name: powerful-robin-833
+run_uuid: acec8e314e9843cf9f37fa3c191d6be3
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1684288478884
+status: 4
+tags: []
+user_id: uribe

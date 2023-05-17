@@ -1,0 +1,16 @@
+artifact_uri: mlflow-artifacts:/0/89947aaf4dfd49de8e5acce3f0d7aae8/artifacts
+deleted_time: 1684287599031
+end_time: 1684286416231
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: deleted
+run_id: 89947aaf4dfd49de8e5acce3f0d7aae8
+run_name: bedecked-tern-667
+run_uuid: 89947aaf4dfd49de8e5acce3f0d7aae8
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1684286414750
+status: 4
+tags: []
+user_id: uribe

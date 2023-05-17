@@ -1,0 +1,16 @@
+artifact_uri: mlflow-artifacts:/0/a04441f94e514d54bbc7d6436d5514cf/artifacts
+deleted_time: 1684287599024
+end_time: 1684286632260
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: deleted
+run_id: a04441f94e514d54bbc7d6436d5514cf
+run_name: fortunate-sponge-285
+run_uuid: a04441f94e514d54bbc7d6436d5514cf
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1684286617202
+status: 4
+tags: []
+user_id: uribe
