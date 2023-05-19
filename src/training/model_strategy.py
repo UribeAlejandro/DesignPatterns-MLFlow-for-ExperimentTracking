@@ -2,22 +2,34 @@ from __future__ import annotations
 
 import pickle
 from abc import ABC, abstractmethod
-from typing import List, Tuple
+from typing import Any, List, Optional, Tuple
 
 import mlflow
+import numpy as np
 import pandas as pd
+import tensorflow as tf
+from keras.layers import Dense, Dropout, Normalization
+from keras.models import Sequential
 from lightgbm import LGBMClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
-from tensorflow.python.keras import Input
-from tensorflow.python.keras.layers import Dense, Dropout
-from tensorflow.python.keras.models import Sequential
+from tensorflow import Tensor
 
-from src.constants import MLFLOW_TRACKING_URI, MODEL_PATH, RANDOM_STATE, SCALER_FOLDER, SCALER_PATH
-from src.training.fine_tuning import fine_tune
+from src.constants import (
+    EXPLAINABILITY_ALGORITHM,
+    MLFLOW_TRACKING_URI,
+    MODEL_PATH,
+    RANDOM_STATE,
+    SCALER_FOLDER,
+    SCALER_PATH,
+)
+from src.training.fine_tuning import BayesSearch, GridSearch, RandomSearch  # noqa
+from src.utils.miscellaneous import set_logger
 
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+
+logger = set_logger(__name__)
 
 __all__ = [
     "Model",
@@ -26,6 +38,10 @@ __all__ = [
     "NeuralNetworkModel",
     "LightgbmModel",
 ]
+
+gpu_devices = tf.config.experimental.list_physical_devices("GPU")
+for device in gpu_devices:
+    tf.config.experimental.set_memory_growth(device, True)
 
 
 class Model(ABC):
@@ -79,7 +95,14 @@ class Model(ABC):
         ...
 
     @abstractmethod
-    def fit(self, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, **kwargs) -> None:
+    def fit(
+        self,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series,
+        **kwargs,
+    ) -> None:
         """Fits the model on the given data.
 
         Parameters
@@ -115,41 +138,8 @@ class Model(ABC):
 
 
 class LogisticRegressionModel(Model):
-    """Implementation of the Model interface using a Logistic Regression.
-
-    Parameters
-    ----------
-    *args : list
-        Variable length argument list.
-
-    **kwargs : dict
-        Arbitrary keyword arguments.
-
-
-    Attributes
-    ----------
-    model : LogisticRegression
-        The underlying LogisticRegression model used for prediction.
-
-    scaler : StandardScaler
-        The underlying Standard Scaler.
-
-    Methods
-    -------
-    preprocess(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series]
-        Preprocesses the data.
-
-    fit(X: pandas.DaraFrame, y: pandas.Series) -> None
-        Fits the model on the given data.
-
-    predict(X: pyarrow.Table) -> np.array
-        Predicts `adversarial labels` for the given data.
-
-    private static scale_data(data_train: pyarrow.Table, data_test: pyarrow.Table, features:
-    List[str]) -> Tuple[pyarrow.Table, pyarrow.Table]
-        Scales the data by subtracting the mean and dividing it by the standard
-        deviation.
-    """
+    """A concrete implementation of the Model interface that uses a Logistic
+    Regression."""
 
     def __init__(self, *args, **kwargs):
         self.__scaler = StandardScaler()
@@ -168,9 +158,17 @@ class LogisticRegressionModel(Model):
 
         return X_train_scaled, X_test_scaled, y_train, y_test
 
-    def fit(self, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, **kwargs) -> None:
+    def fit(
+        self,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series,
+        **kwargs,
+    ) -> None:
         mlflow.sklearn.autolog()
-        with mlflow.start_run() as run:  # noqa
+        with mlflow.start_run(nested=True) as run:
+            logger.info("Run ID: %s", run)
             self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, **kwargs)
             mlflow.log_artifact(SCALER_PATH, SCALER_FOLDER)
 
@@ -212,32 +210,7 @@ class LogisticRegressionModel(Model):
 
 class RandomForestModel(Model):
     """A concrete implementation of the Model interface that uses a Random
-    Forest classifier.
-
-    Parameters
-    ----------
-    *args : list
-        Variable length argument list.
-
-    **kwargs : dict
-        Arbitrary keyword arguments.
-
-    Attributes
-    ----------
-    model : LogisticRegression
-        The underlying RandomForestClassifier model used for prediction.
-
-    Methods
-    --------
-    preprocess(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series]
-        Preprocesses the data.
-
-    fit(self, X: pd.DataFrame, y: pd.Series) -> None
-        Fits the model on the given data.
-
-    predict(self, X: pd.DataFrame) -> np.array
-        Predicts the adversarial labels for the given input features.
-    """
+    Forest classifier."""
 
     def __init__(self, *args, **kwargs):
         self.__model = RandomForestClassifier(random_state=RANDOM_STATE, n_jobs=-1, *args, **kwargs)
@@ -251,9 +224,17 @@ class RandomForestModel(Model):
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
         return X_train, X_test, y_train, y_test
 
-    def fit(self, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, **kwargs) -> None:
+    def fit(
+        self,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series,
+        **kwargs,
+    ) -> None:
         mlflow.sklearn.autolog()
-        with mlflow.start_run() as run:  # noqa
+        with mlflow.start_run(nested=True) as run:
+            logger.info("Run ID: %s", run)
             self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, **kwargs)
 
     @property
@@ -261,45 +242,12 @@ class RandomForestModel(Model):
         return self.__model
 
 
-class NeuralNetworkModel(Model):
-    """A concrete implementation of the Model interface that uses a Neural
-    Network for classification.
+class LightgbmModel(Model):
+    """A concrete implementation of the Model interface that uses a LightGBM
+    classifier."""
 
-    Parameters
-    ----------
-    *args : list
-        Variable length argument list.
-
-    **kwargs : dict
-        Arbitrary keyword arguments.
-
-    Attributes
-    ----------
-    model : LogisticRegression
-        The underlying RandomForestClassifier model used for prediction.
-
-    Methods
-    --------
-    preprocess(self, data_train: pa.Table, data_test: pa.Table, features: List[str])
-    -> Tuple[pa.Table, pa.Table]
-        Preprocesses the training and tests data by selecting the features and converts
-        it to Pandas DataFrames.
-
-    fit(self, X: pd.DataFrame, y: pd.Series) -> None
-        Fits the Random Forest model to the training data.
-
-    predict(self, X: pd.DataFrame) -> np.array
-        Predicts the adversarial labels for the given input features.
-    """
-
-    def __int__(self, *args, **kwargs):
-        kwargs_creation = kwargs.get("creation")
-        kwargs_compilation = kwargs.get("compilation")
-
-        __model = self.__create_model(**kwargs_creation)
-        __model = self.__compile_model(__model, **kwargs_compilation)
-
-        self.__model = __model
+    def __init__(self, *args, **kwargs):
+        self.__model = LGBMClassifier(random_state=RANDOM_STATE, n_jobs=-1, *args, **kwargs)
 
     def preprocess(
         self,
@@ -310,19 +258,86 @@ class NeuralNetworkModel(Model):
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
         return X_train, X_test, y_train, y_test
 
-    def fit(self, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, **kwargs) -> None:
+    def fit(
+        self,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series,
+        **kwargs,
+    ) -> None:
+        mlflow.lightgbm.autolog()
+        with mlflow.start_run(nested=True) as run:
+            logger.info("Run ID: %s", run)
+            self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, **kwargs)
+
+    @property
+    def model(self) -> LGBMClassifier:
+        return self.__model
+
+
+class NeuralNetworkModel(Model):
+    """A concrete implementation of the Model interface that uses a Neural
+    Network for classification."""
+
+    def __init__(self, *args, **kwargs):
+        self.__model: Sequential = None
+        self.__scaler = StandardScaler()
+
+    def preprocess(
+        self,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+        X_train = self.__scale_data(X_train)
+        X_test = self.__scaler.transform(X_test)
+
+        X_train = tf.convert_to_tensor(X_train)
+        X_test = tf.convert_to_tensor(X_test)
+
+        y_train = np.asarray(y_train).astype("float32").reshape((-1, 1))
+        y_test = np.asarray(y_test).astype("float32").reshape((-1, 1))
+
+        return X_train, X_test, y_train, y_test
+
+    def fit(
+        self,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series,
+        **kwargs,
+    ) -> None:
+        kwargs_fit = kwargs.get("fit", {})
+        kwargs_creation = kwargs.get("creation", {})
+        kwargs_compilation = kwargs.get("compilation", {})
+
+        model = self.__create_model(X_train, **kwargs_creation)
+        model = self.__compile_model(model, **kwargs_compilation)
+
+        training_ds = tf.data.Dataset.from_tensor_slices((X_train, y_train))
+        test_ds = tf.data.Dataset.from_tensor_slices((X_test, y_test))
+
+        training_batches = training_ds.shuffle(1000).batch(32)
+        test_batches = test_ds.shuffle(1000).batch(32)
+
         mlflow.tensorflow.autolog()
-        with mlflow.start_run() as run:  # noqa
-            self.__model.fit(X_train, y_train, validation_data=(X_test, y_test), **kwargs)
-            # mlflow.shap.log_explanation(self.__model.predict, X_train)
+        with mlflow.start_run(nested=True) as run:
+            logger.info("Run ID: %s", run)
+            self.__model = model.fit(training_batches, validation_data=test_batches, **kwargs_fit)
+            mlflow.log_artifact(SCALER_PATH, SCALER_FOLDER)
 
     @staticmethod
-    def __create_model(input_dim: Tuple[int, int], layers_units: List[int], activation: str) -> Sequential:
+    def __create_model(
+        X_train: Tensor, layers_units: List[int], activation: str, dropout: Optional[float] = 0.3
+    ) -> Sequential:
         """Creates a sequential model.
 
         Parameters
         ----------
-        input_dim : Tuple[int, int]
+        X_train : Tuple[int, int]
             The input dimensions of the model.
 
         layers_units : List[int]
@@ -331,18 +346,24 @@ class NeuralNetworkModel(Model):
         activation : str
             The activation function to use for each layer of the model.
 
+        dropout : Optional[float] (default=0.3)
+            Dropout rate.
+
         Returns
         -------
         Sequential
             The created model.
         """
+        normalization = Normalization(axis=-1)
+        normalization.adapt(X_train)
+
         model = Sequential()
-        model.add(Input(shape=input_dim))
+        model.add(normalization)
 
         for units in layers_units:
             model.add(Dense(units, activation=activation))
 
-        model.add(Dropout(0.2))
+        model.add(Dropout(dropout))
         model.add(Dense(1, activation="sigmoid"))
         return model
 
@@ -369,61 +390,49 @@ class NeuralNetworkModel(Model):
         model.compile(*args, **kwargs)
         return model
 
-    @property
-    def model(self) -> Sequential:
-        return self.__model
+    def __scale_data(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Z-scales data.
 
+        Parameters
+        ----------
+        X : pd.DataFrame
+            Data to be scaled.
 
-class LightgbmModel(Model):
-    """A concrete implementation of the Model interface that uses a LightGBM
-    classifier.
+        Returns
+        -------
+        pd.DataFrame
+            Scaled data.
+        """
+        X = self.__scaler.fit_transform(X)
 
-    Parameters
-    ----------
-    *args : list
-        Variable length argument list.
+        with open(SCALER_PATH, "wb") as file:
+            pickle.dump(self.__scaler, file)
 
-    **kwargs : dict
-        Arbitrary keyword arguments.
-
-    Attributes
-    ----------
-    model : LogisticRegression
-        The underlying RandomForestClassifier model used for prediction.
-
-    Methods
-    --------
-    preprocess(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series]
-        Preprocesses the data.
-
-    fit(self, X: pd.DataFrame, y: pd.Series) -> None
-        Fits the Random Forest model to the training data.
-    """
-
-    def __int__(self, *args, **kwargs):
-        self.__model = LGBMClassifier(random_state=RANDOM_STATE, n_jobs=-1, *args, **kwargs)
-
-    def preprocess(
-        self,
-        X_train: pd.DataFrame,
-        X_test: pd.DataFrame,
-        y_train: pd.Series,
-        y_test: pd.Series,
-    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-        return X_train, X_test, y_train, y_test
-
-    def fit(self, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, **kwargs) -> None:
-        mlflow.lightgbm.autolog(nested=True)
-        with mlflow.start_run() as run:  # noqa
-            self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, **kwargs)
+        return X
 
     @property
-    def model(self) -> LGBMClassifier:
+    def model(self) -> LogisticRegression:
         return self.__model
+
+    @property
+    def scaler(self) -> StandardScaler:
+        """Returns the underlying scaler.
+
+        Returns
+        -------
+        StandardScaler
+            Underlying scaler.
+        """
+        return self.__scaler
 
 
 def _sklearn_loop(
-    model: __all__, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, **kwargs
+    model: Any,
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    y_train: pd.Series,
+    y_test: pd.Series,
+    **kwargs,
 ) -> Model:
     """Trains a model using the scikit-learn API.
 
@@ -452,31 +461,35 @@ def _sklearn_loop(
     Model
         The trained model.
     """
-
     kwargs_fit = kwargs.get("fit", {})
     kwargs_fine_tune = kwargs.get("fine_tune", {})
 
     fine_tune_flag = kwargs_fine_tune.get("flag", False)
     param_grid = kwargs_fine_tune.get("param_grid", {})
+    strategy = kwargs_fine_tune.get("strategy", "RandomSearch")
 
     eval_data = X_test.copy()
     eval_data["target"] = y_test.copy()
+
     if fine_tune_flag:
-        strategy = kwargs_fine_tune.get("strategy", "randomized")
-        model = fine_tune(model, X_train, y_train, param_grid, strategy)
-        model = model.best_estimator_
+        search_alg = eval(f"{strategy}()")
+        search_alg.fit(model, X_train, y_train, param_grid)
+        model = search_alg.search_algorithm.best_estimator_
     else:
         model.fit(X_train, y_train, **kwargs_fit)
 
     model_info = mlflow.sklearn.log_model(model, MODEL_PATH)
+
     mlflow.evaluate(
         model_info.model_uri,
         data=eval_data,
         targets="target",
         model_type="classifier",
         evaluators="default",
-        # evaluator_config={"log_model_explainability": False}
-        evaluator_config={"explainability_algorithm": "kernel"},
+        evaluator_config={
+            "explainability_algorithm": EXPLAINABILITY_ALGORITHM,
+            "metric_prefix": "evaluation_",
+        },
     )
 
     return model

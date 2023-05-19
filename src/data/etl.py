@@ -7,10 +7,13 @@ from pandas import DataFrame, Series, concat, read_parquet
 from sklearn.datasets import fetch_openml
 from sklearn.impute import SimpleImputer
 
-__all__ = ["pipeline", "extract_data", "transform_data", "load_data"]
+from src.utils.miscellaneous import set_logger
+
+__all__ = ["etl_pipeline", "extract_data", "transform_data", "load_data"]
+logger = set_logger(__name__)
 
 
-def pipeline(
+def etl_pipeline(
     dataset_id: Union[str, Path],
     data_home: Union[str, Path],
     output_path: Union[str, Path],
@@ -34,11 +37,13 @@ def pipeline(
         A tuple containing the features DataFrame and the target Series.
     """
     if not os.path.isfile(output_path):
+        logger.info("Started: ETL")
         features, target = extract_data(dataset_id, data_home)
         features, target = transform_data(features, target)
         data = concat([features, target], axis=1)
         load_data(data, output_path)
     else:
+        logger.info("Skipped ETL. %s dataset already exists", dataset_id)
         raw_data = read_parquet(output_path, engine="pyarrow")
         features = raw_data.drop(["target"], axis=1)
         target = raw_data["target"]

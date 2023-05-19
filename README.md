@@ -48,10 +48,10 @@ mlflow server --backend-store-uri=$MLFLOW_TRACKING_URI --default-artifact-root=f
 Modify `data/config/config.yaml` according to your needs. Then, you can start a training loop as follows:
 
 ```bash
-python -m src.main [commands]
+python -m src.main [options]
 ```
 
-The `commands` are listed below:
+The `options` are listed below:
 
 ```bash
 usage: [-h] [-f FILEPATH] [-d DATASET] [-l LOCATION] [-e EXPERIMENT_NAME]
@@ -68,7 +68,7 @@ options:
                         MLFlow's experiment name
 ```
 
-The project will then load the Higgs dataset, train a model, and track the experiment using `MLFlow`. You can then view the results of the experiment in the `MLFlow UI` as follows:
+The project will then load the `Higgs` dataset, train a model, and track the experiment using `MLFlow`. You can then view the results of the experiment in the `MLFlow UI` as follows:
 
 ```bash
 mlflow ui

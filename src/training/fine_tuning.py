@@ -1,49 +1,94 @@
-from typing import Any, Union
+from __future__ import annotations
 
-import pandas as pd
-from sklearn.model_selection import RandomizedSearchCV
+from abc import ABC, abstractmethod
+from typing import Any
+
+from pandas import DataFrame, Series
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from skopt import BayesSearchCV
 
 from src.constants import CV, RANDOM_STATE
 
-__all__ = ["fine_tune"]
+__all__ = ["BayesSearch", "RandomSearch", "GridSearch"]
 
 
-def fine_tune(
-    estimator: Any, X: pd.DataFrame, y: pd.Series, param_grid: dict, strategy: str = "randomized"
-) -> Union[BayesSearchCV, RandomizedSearchCV]:
-    """Fine-tune a machine learning model using Bayesian Search CV or
-    randomized search.
+class FineTuner(ABC):
+    """Fine-tune a machine learning model using Bayesian Search CV, Randomized
+    Search or Grid Search."""
 
-    Parameters
-    ----------
-    estimator : Model
-        The machine learning model to be fine-tuned.
+    @abstractmethod
+    def fit(self, estimator: Any, X: DataFrame, y: Series, param_grid: dict) -> None:
+        """Fits strategy search.
 
-    X : pd.DataFrame
-        The training data.
+        Parameters
+        ----------
+        estimator : Model
+            The machine learning model to be fine-tuned.
 
-    y : pd.Series
-        The target values for the training data.
+        X : pd.DataFrame
+            The training data.
 
-    param_grid : dict
-        A dictionary of hyperparameters to search over.
+        y : pd.Series
+            The target values for the training data.
 
-    strategy : str
-        Either Bayesian Search CV or Randomized Search
+        param_grid : dict
+            A dictionary of hyperparameters to search over.
 
-    Returns
-    -------
-    Union[BayesSearchCV, RandomizedSearchCV]
-        The trained machine learning model.
-    """
-    if strategy == "bayes":
-        cv = BayesSearchCV(estimator=estimator, search_spaces=param_grid, cv=CV, n_jobs=-1, random_state=RANDOM_STATE)
-    elif strategy == "randomized":
-        cv = RandomizedSearchCV(
+        Returns
+        -------
+        Union[BayesSearchCV, RandomizedSearchCV]
+            The trained machine learning model.
+        """
+        ...
+
+    @property
+    @abstractmethod
+    def search_algorithm(self) -> FineTuner:
+        """
+
+        Returns
+        -------
+        FineTuner
+            Instance of search.
+        """
+        ...
+
+
+class BayesSearch(FineTuner):
+    def __int__(self, **kwargs):
+        self.__fine_tuner: BayesSearchCV
+
+    def fit(self, estimator: Any, X: DataFrame, y: Series, param_grid: dict) -> None:
+        self.__fine_tuner = BayesSearchCV(
+            estimator=estimator, search_spaces=param_grid, cv=CV, n_jobs=-1, random_state=RANDOM_STATE
+        )
+
+    @property
+    def search_algorithm(self) -> FineTuner:
+        return self.__fine_tuner
+
+
+class RandomSearch(FineTuner):
+    def __int__(self):
+        self.__fine_tuner: RandomizedSearchCV
+
+    def fit(self, estimator: Any, X: DataFrame, y: Series, param_grid: dict) -> None:
+        self.__fine_tuner = RandomizedSearchCV(
             estimator=estimator, param_distributions=param_grid, cv=CV, n_jobs=-1, random_state=RANDOM_STATE
         )
-    else:
-        raise NotImplementedError
 
-    return cv.fit(X, y)
+    @property
+    def search_algorithm(self) -> FineTuner:
+        return self.__fine_tuner
+
+
+class GridSearch(FineTuner):
+    def __int__(self):
+        self.__fine_tuner: GridSearchCV
+
+    def fit(self, estimator: Any, X: DataFrame, y: Series, param_grid: dict) -> None:
+        self.__fine_tuner = GridSearchCV(estimator=estimator, param_grid=param_grid, cv=CV, n_jobs=-1)
+
+    @property
+    def search_algorithm(self) -> FineTuner:
+        return self.__fine_tuner

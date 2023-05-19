@@ -1,13 +1,20 @@
+import warnings
 from typing import Tuple
 
 import mlflow
 import pandas as pd
+from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
 from sklearn.model_selection import train_test_split
 
-from src.constants import RANDOM_STATE
+from src.constants import RANDOM_STATE, TEST_SIZE
 from src.training.model_strategy import Model
+from src.utils.miscellaneous import set_logger
+
+warnings.simplefilter("ignore", category=NumbaDeprecationWarning)
+warnings.simplefilter("ignore", category=NumbaPendingDeprecationWarning)
 
 __all__ = ["Pipeline"]
+logger = set_logger(__name__)
 
 
 class Pipeline:
@@ -48,11 +55,16 @@ class Pipeline:
         -------
         None
         """
+        logger.info("Started: Preprocess data")
+        X_train, X_test, y_train, y_test = self.__preprocess(X, y)
+        logger.info("Finished: Preprocess data")
+
+        logger.info("Get/Create %s experiment", experiment_name)
         self.__search_create_experiment(experiment_name)
 
-        X_train, X_test, y_train, y_test = self.__preprocess(X, y)
-
-        self.__train(X_train, X_test, y_train, y_test, experiment_name, **kwargs)
+        logger.info("Started: Training")
+        self.__train(X_train, X_test, y_train, y_test, **kwargs)
+        logger.info("Finished: Training")
 
     def __train(
         self,
@@ -60,7 +72,6 @@ class Pipeline:
         X_test: pd.DataFrame,
         y_train: pd.Series,
         y_test: pd.Series,
-        experiment_name: str,
         **kwargs,
     ) -> None:
         """Train a Model's concrete implementation.
@@ -107,7 +118,9 @@ class Pipeline:
         Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]
             Tuple of (X_train, X_test, y_train, y_test).
         """
-        X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=RANDOM_STATE, stratify=y, shuffle=True)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, random_state=RANDOM_STATE, stratify=y, shuffle=True, test_size=TEST_SIZE
+        )
 
         X_train = X_train.reset_index(drop=True)
         X_test = X_test.reset_index(drop=True)
@@ -140,6 +153,8 @@ class Pipeline:
         """
         experiment = mlflow.search_experiments(filter_string=f"name='{experiment_name}'")
         if not experiment:
+            logger.info("%s: experiment does not exist. It will be created.", experiment_name)
             mlflow.create_experiment(name=experiment_name, artifact_location="mlruns/")
-
-        mlflow.set_experiment(experiment_name)
+        else:
+            logger.info("%s: experiment already exists.", experiment_name)
+            mlflow.set_experiment(experiment_name)

@@ -5,6 +5,7 @@ data/openml/
 *.pkl
 *.db
 mlruns/
+.idea/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

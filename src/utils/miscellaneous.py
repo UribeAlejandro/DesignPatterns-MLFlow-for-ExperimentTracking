@@ -1,3 +1,4 @@
+import logging
 from argparse import ArgumentParser
 
 
@@ -31,3 +32,12 @@ def create_parser() -> ArgumentParser:
     )
 
     return parser
+
+
+def set_logger(name: str) -> logging.Logger:
+    logger = logging.Logger(name)
+    handler = logging.StreamHandler()
+    h_format = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    handler.setFormatter(h_format)
+    logger.addHandler(handler)
+    return logger

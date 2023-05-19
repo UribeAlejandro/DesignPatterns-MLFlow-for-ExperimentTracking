@@ -8,3 +8,7 @@ def test_transform():
 
 def test_load():
     assert 1 == 1
+
+
+def test_pipeline():
+    assert True
