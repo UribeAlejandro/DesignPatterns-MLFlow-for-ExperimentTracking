@@ -15,16 +15,10 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from tensorflow import Tensor
+from tensorflow.data import Dataset
 
-from src.constants import (
-    EXPLAINABILITY_ALGORITHM,
-    MLFLOW_TRACKING_URI,
-    MODEL_PATH,
-    RANDOM_STATE,
-    SCALER_FOLDER,
-    SCALER_PATH,
-)
-from src.training.fine_tuning import BayesSearch, GridSearch, RandomSearch  # noqa
+from src.constants import MLFLOW_TRACKING_URI, MODEL_PATH, RANDOM_STATE, SCALER_FOLDER, SCALER_PATH
+from src.training.fine_tuning import BayesSearch, FineTuner, GridSearch, RandomSearch  # noqa
 from src.utils.miscellaneous import set_logger
 
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
@@ -166,9 +160,9 @@ class LogisticRegressionModel(Model):
         y_test: pd.Series,
         **kwargs,
     ) -> None:
-        mlflow.sklearn.autolog()
+        mlflow.sklearn.autolog(silent=True)
         with mlflow.start_run(nested=True) as run:
-            logger.info("Run ID: %s", run)
+            logger.info("Run ID: %s", run.info.run_id)
             self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, **kwargs)
             mlflow.log_artifact(SCALER_PATH, SCALER_FOLDER)
 
@@ -232,9 +226,9 @@ class RandomForestModel(Model):
         y_test: pd.Series,
         **kwargs,
     ) -> None:
-        mlflow.sklearn.autolog()
+        mlflow.sklearn.autolog(silent=True)
         with mlflow.start_run(nested=True) as run:
-            logger.info("Run ID: %s", run)
+            logger.info("Run ID: %s", run.info.run_id)
             self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, **kwargs)
 
     @property
@@ -266,9 +260,9 @@ class LightgbmModel(Model):
         y_test: pd.Series,
         **kwargs,
     ) -> None:
-        mlflow.lightgbm.autolog()
+        mlflow.lightgbm.autolog(silent=True)
         with mlflow.start_run(nested=True) as run:
-            logger.info("Run ID: %s", run)
+            logger.info("Run ID: %s", run.info.run_id)
             self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, **kwargs)
 
     @property
@@ -294,12 +288,6 @@ class NeuralNetworkModel(Model):
         X_train = self.__scale_data(X_train)
         X_test = self.__scaler.transform(X_test)
 
-        X_train = tf.convert_to_tensor(X_train)
-        X_test = tf.convert_to_tensor(X_test)
-
-        y_train = np.asarray(y_train).astype("float32").reshape((-1, 1))
-        y_test = np.asarray(y_test).astype("float32").reshape((-1, 1))
-
         return X_train, X_test, y_train, y_test
 
     def fit(
@@ -316,16 +304,11 @@ class NeuralNetworkModel(Model):
 
         model = self.__create_model(X_train, **kwargs_creation)
         model = self.__compile_model(model, **kwargs_compilation)
+        training_batches, test_batches = self.__create_datasets(X_train, X_test, y_train, y_test)
 
-        training_ds = tf.data.Dataset.from_tensor_slices((X_train, y_train))
-        test_ds = tf.data.Dataset.from_tensor_slices((X_test, y_test))
-
-        training_batches = training_ds.shuffle(1000).batch(32)
-        test_batches = test_ds.shuffle(1000).batch(32)
-
-        mlflow.tensorflow.autolog()
+        mlflow.tensorflow.autolog(silent=True)
         with mlflow.start_run(nested=True) as run:
-            logger.info("Run ID: %s", run)
+            logger.info("Run ID: %s", run.info.run_id)
             self.__model = model.fit(training_batches, validation_data=test_batches, **kwargs_fit)
             mlflow.log_artifact(SCALER_PATH, SCALER_FOLDER)
 
@@ -410,6 +393,45 @@ class NeuralNetworkModel(Model):
 
         return X
 
+    @staticmethod
+    def __create_datasets(
+        X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, batch_size: int = 32
+    ) -> Tuple[Dataset, Dataset]:
+        """Create tensorflow datasets for training and testing.
+
+        Parameters
+        ----------
+        X_train : pd.DataFrame
+            The training data.
+
+        X_test : pd.DataFrame
+            The test data.
+
+        y_train : pd.Series
+            The target values for the training data.
+
+        y_test : pd.Series
+            The target values for the test data.
+
+        Returns
+        -------
+        Tuple[Dataset, Dataset]
+            Datasets.
+        """
+        X_train = tf.convert_to_tensor(X_train)
+        X_test = tf.convert_to_tensor(X_test)
+
+        y_train = np.asarray(y_train).astype("float32").reshape((-1, 1))
+        y_test = np.asarray(y_test).astype("float32").reshape((-1, 1))
+
+        training_ds = tf.data.Dataset.from_tensor_slices((X_train, y_train))
+        test_ds = tf.data.Dataset.from_tensor_slices((X_test, y_test))
+
+        training_batches = training_ds.shuffle(1000).batch(batch_size)
+        test_batches = test_ds.shuffle(1000).batch(batch_size)
+
+        return training_batches, test_batches
+
     @property
     def model(self) -> LogisticRegression:
         return self.__model
@@ -462,34 +484,42 @@ def _sklearn_loop(
         The trained model.
     """
     kwargs_fit = kwargs.get("fit", {})
-    kwargs_fine_tune = kwargs.get("fine_tune", {})
 
+    kwargs_evaluate = kwargs.get("evaluate", {})
+    evaluate_flag = kwargs_evaluate.get("flag", False)
+    evaluator_config = kwargs_evaluate.get("evaluator_config")
+
+    kwargs_fine_tune = kwargs.get("fine_tune", {})
     fine_tune_flag = kwargs_fine_tune.get("flag", False)
+
     param_grid = kwargs_fine_tune.get("param_grid", {})
     strategy = kwargs_fine_tune.get("strategy", "RandomSearch")
 
-    eval_data = X_test.copy()
-    eval_data["target"] = y_test.copy()
-
     if fine_tune_flag:
-        search_alg = eval(f"{strategy}()")
-        search_alg.fit(model, X_train, y_train, param_grid)
-        model = search_alg.search_algorithm.best_estimator_
+        logger.info("Started: Fine tuning")
+        search_algo = eval(f"{strategy}()")
+        ft = FineTuner(search_algo)
+        search_algo = ft.fit_search_algorithm(model, X_train, y_train, param_grid)
+
+        # search_algo = ft.search_algorithm
+        model = search_algo.best_estimator_
+        logger.info("Finished: Fine tuning")
     else:
         model.fit(X_train, y_train, **kwargs_fit)
 
-    model_info = mlflow.sklearn.log_model(model, MODEL_PATH)
+    if evaluate_flag:
+        eval_data = X_test.copy()
+        eval_data["target"] = y_test.copy()
 
-    mlflow.evaluate(
-        model_info.model_uri,
-        data=eval_data,
-        targets="target",
-        model_type="classifier",
-        evaluators="default",
-        evaluator_config={
-            "explainability_algorithm": EXPLAINABILITY_ALGORITHM,
-            "metric_prefix": "evaluation_",
-        },
-    )
+        model_info = mlflow.sklearn.log_model(model, MODEL_PATH)
+
+        mlflow.evaluate(
+            model_info.model_uri,
+            data=eval_data,
+            targets="target",
+            model_type="classifier",
+            evaluators="default",
+            evaluator_config=evaluator_config,
+        )
 
     return model

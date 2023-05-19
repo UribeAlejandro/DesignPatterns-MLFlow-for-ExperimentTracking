@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import yaml
 from yaml import SafeLoader
 
@@ -12,6 +13,8 @@ from src.training.model_strategy import (  # noqa
     RandomForestModel,
 )
 from src.utils.miscellaneous import create_parser, set_logger
+
+plt.switch_backend("agg")
 
 if __name__ == "__main__":
     logger = set_logger(__name__)

@@ -9,10 +9,13 @@ from skopt import BayesSearchCV
 
 from src.constants import CV, RANDOM_STATE
 
-__all__ = ["BayesSearch", "RandomSearch", "GridSearch"]
+__all__ = ["BayesSearch", "RandomSearch", "GridSearch", "FineTuner"]
 
 
-class FineTuner(ABC):
+# TODO: This is not working.
+
+
+class FineTuneStrategy(ABC):
     """Fine-tune a machine learning model using Bayesian Search CV, Randomized
     Search or Grid Search."""
 
@@ -43,52 +46,72 @@ class FineTuner(ABC):
 
     @property
     @abstractmethod
-    def search_algorithm(self) -> FineTuner:
+    def search_algorithm(self) -> FineTuneStrategy:
         """
 
         Returns
         -------
-        FineTuner
+        FineTuneStrategy
             Instance of search.
         """
         ...
 
 
-class BayesSearch(FineTuner):
-    def __int__(self, **kwargs):
-        self.__fine_tuner: BayesSearchCV
+class BayesSearch(FineTuneStrategy):
+    def __init__(self, **kwargs):
+        self.__fine_tuner: BayesSearchCV = None
 
     def fit(self, estimator: Any, X: DataFrame, y: Series, param_grid: dict) -> None:
         self.__fine_tuner = BayesSearchCV(
             estimator=estimator, search_spaces=param_grid, cv=CV, n_jobs=-1, random_state=RANDOM_STATE
         )
 
+        return self.__fine_tuner
+
     @property
-    def search_algorithm(self) -> FineTuner:
+    def search_algorithm(self) -> FineTuneStrategy:
         return self.__fine_tuner
 
 
-class RandomSearch(FineTuner):
-    def __int__(self):
-        self.__fine_tuner: RandomizedSearchCV
+class RandomSearch(FineTuneStrategy):
+    def __init__(self):
+        self.__fine_tuner: RandomizedSearchCV = None
 
     def fit(self, estimator: Any, X: DataFrame, y: Series, param_grid: dict) -> None:
         self.__fine_tuner = RandomizedSearchCV(
             estimator=estimator, param_distributions=param_grid, cv=CV, n_jobs=-1, random_state=RANDOM_STATE
         )
 
+        return self.__fine_tuner
+
     @property
-    def search_algorithm(self) -> FineTuner:
+    def search_algorithm(self) -> FineTuneStrategy:
         return self.__fine_tuner
 
 
-class GridSearch(FineTuner):
-    def __int__(self):
-        self.__fine_tuner: GridSearchCV
+class GridSearch(FineTuneStrategy):
+    def __init__(self):
+        self.__fine_tuner: GridSearchCV = None
 
     def fit(self, estimator: Any, X: DataFrame, y: Series, param_grid: dict) -> None:
         self.__fine_tuner = GridSearchCV(estimator=estimator, param_grid=param_grid, cv=CV, n_jobs=-1)
 
-    @property
-    def search_algorithm(self) -> FineTuner:
         return self.__fine_tuner
+
+    @property
+    def search_algorithm(self) -> FineTuneStrategy:
+        return self.__fine_tuner
+
+
+class FineTuner:
+    def __init__(self, search_algo: FineTuneStrategy):
+        self.__search_algo = search_algo
+
+    def fit_search_algorithm(self, estimator: Any, X: DataFrame, y: Series, param_grid: dict) -> None:
+        self.__search_algo.fit(estimator, X, y, param_grid)
+
+        return self.__search_algo.search_algorithm
+
+    @property
+    def search_algorithm(self) -> FineTuneStrategy:
+        return self.__search_algo
