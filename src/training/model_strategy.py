@@ -499,10 +499,9 @@ def _sklearn_loop(
         logger.info("Started: Fine tuning")
         search_algo = eval(f"{strategy}()")
         ft = FineTuner(search_algo)
-        search_algo = ft.fit_search_algorithm(model, X_train, y_train, param_grid)
+        ft.fit_search_algorithm(model, X_train, y_train, param_grid)
 
-        # search_algo = ft.search_algorithm
-        model = search_algo.best_estimator_
+        model = ft.search_algorithm.best_estimator_
         logger.info("Finished: Fine tuning")
     else:
         model.fit(X_train, y_train, **kwargs_fit)
