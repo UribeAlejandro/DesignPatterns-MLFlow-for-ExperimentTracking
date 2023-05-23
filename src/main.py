@@ -5,14 +5,15 @@ import yaml
 from yaml import SafeLoader
 
 from src.data.etl import etl_pipeline
-from src.training.factory.fine_tuning import BayesSearch, FineTuner, GridSearch, RandomSearch  # noqa
-from src.training.factory.model import (  # noqa
+from src.training.factory.FineTuner import BayesSearch, GridSearch, RandomSearch  # noqa
+from src.training.factory.Model import (  # noqa
     LightGBMModel,
     LogisticRegressionModel,
     NeuralNetworkModel,
     RandomForestModel,
 )
-from src.training.loop import Pipeline
+from src.training.strategy.search_algorithm import SearchAlgorithm
+from src.training.strategy.training import Pipeline
 from src.utils.miscellaneous import create_parser, set_logger
 
 plt.switch_backend("agg")
@@ -55,7 +56,7 @@ if __name__ == "__main__":
             param_grid = kwargs_fine_tune.get("param_grid", {})
             strategy = kwargs_fine_tune.get("strategy", "RandomSearch")
             search_algo = eval(f"{strategy}()")
-            fine_tuner = FineTuner(search_algo)
+            fine_tuner = SearchAlgorithm(search_algo)
         else:
             fine_tuner = None
 

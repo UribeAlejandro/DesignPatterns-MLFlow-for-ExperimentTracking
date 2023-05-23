@@ -18,7 +18,7 @@ from tensorflow import Tensor
 from tensorflow.data import Dataset
 
 from src.constants import MLFLOW_TRACKING_URI, MODEL_PATH, RANDOM_STATE, SCALER_FOLDER, SCALER_PATH
-from src.training.factory.fine_tuning import FineTuner
+from src.training.strategy.search_algorithm import SearchAlgorithm
 from src.utils.miscellaneous import set_logger
 
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
@@ -95,7 +95,7 @@ class Model(ABC):
         X_test: pd.DataFrame,
         y_train: pd.Series,
         y_test: pd.Series,
-        fine_tuner: FineTuner,
+        fine_tuner: SearchAlgorithm,
         **kwargs,
     ) -> None:
         """Fits the model on the given data.
@@ -114,7 +114,7 @@ class Model(ABC):
         y_test : pd.Series
             The target values for the test data.
 
-        fine_tuner : FineTuner
+        fine_tuner : SearchAlgorithm
             The search algorithm.
 
         **kwargs
@@ -162,7 +162,7 @@ class LogisticRegressionModel(Model):
         X_test: pd.DataFrame,
         y_train: pd.Series,
         y_test: pd.Series,
-        fine_tuner: FineTuner,
+        fine_tuner: SearchAlgorithm,
         **kwargs,
     ) -> None:
         mlflow.sklearn.autolog(silent=True)
@@ -229,7 +229,7 @@ class RandomForestModel(Model):
         X_test: pd.DataFrame,
         y_train: pd.Series,
         y_test: pd.Series,
-        fine_tuner: FineTuner,
+        fine_tuner: SearchAlgorithm,
         **kwargs,
     ) -> None:
         mlflow.sklearn.autolog(silent=True)
@@ -264,7 +264,7 @@ class LightGBMModel(Model):
         X_test: pd.DataFrame,
         y_train: pd.Series,
         y_test: pd.Series,
-        fine_tuner: FineTuner,
+        fine_tuner: SearchAlgorithm,
         **kwargs,
     ) -> None:
         mlflow.lightgbm.autolog(silent=True)
@@ -303,7 +303,7 @@ class NeuralNetworkModel(Model):
         X_test: pd.DataFrame,
         y_train: pd.Series,
         y_test: pd.Series,
-        fine_tuner: FineTuner,
+        fine_tuner: SearchAlgorithm,
         **kwargs,
     ) -> None:
         kwargs_fit = kwargs.get("fit", {})
@@ -462,7 +462,7 @@ def _sklearn_loop(
     X_test: pd.DataFrame,
     y_train: pd.Series,
     y_test: pd.Series,
-    fine_tuner: FineTuner,
+    fine_tuner: SearchAlgorithm,
     **kwargs,
 ) -> Model:
     """Trains a model using the scikit-learn API.

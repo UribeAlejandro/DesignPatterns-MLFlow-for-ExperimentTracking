@@ -6,9 +6,9 @@ import pandas as pd
 from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
 from sklearn.model_selection import train_test_split
 
-from src.constants import RANDOM_STATE, TEST_SIZE
-from src.training.factory.fine_tuning import FineTuner
-from src.training.factory.model import Model
+from src.constants import MLFLOW_ARTIFACT_ROOT, RANDOM_STATE, TEST_SIZE
+from src.training.factory.Model import Model
+from src.training.strategy.search_algorithm import SearchAlgorithm
 from src.utils.miscellaneous import set_logger
 
 warnings.simplefilter("ignore", category=NumbaDeprecationWarning)
@@ -31,11 +31,11 @@ class Pipeline:
     model : Model
         The trained machine learning model.
 
-    search_algorithm : FineTuner
+    search_algorithm : SearchAlgorithm
         Search Algorithm
     """
 
-    def __init__(self, model: Model, search_algorithm: FineTuner):
+    def __init__(self, model: Model, search_algorithm: SearchAlgorithm):
         self.__model = model
         self.__search_algorithm = search_algorithm
 
@@ -152,12 +152,12 @@ class Pipeline:
         return self.__model
 
     @property
-    def search_algorithm(self) -> FineTuner:
+    def search_algorithm(self) -> SearchAlgorithm:
         """Returns the search algorithm.
 
         Returns
         -------
-        FineTuner
+        SearchAlgorithm
             The search algorithm.
         """
         return self.__search_algorithm
@@ -173,9 +173,11 @@ class Pipeline:
             The name of the experiment to search for or create.
         """
         experiment = mlflow.search_experiments(filter_string=f"name='{experiment_name}'")
+
         if not experiment:
             logger.info("%s: experiment does not exist. It will be created.", experiment_name)
-            mlflow.create_experiment(name=experiment_name, artifact_location="mlruns/")
+            mlflow.create_experiment(name=experiment_name, artifact_location=MLFLOW_ARTIFACT_ROOT)
         else:
             logger.info("%s: experiment already exists.", experiment_name)
-            mlflow.set_experiment(experiment_name)
+
+        mlflow.set_experiment(experiment_name)

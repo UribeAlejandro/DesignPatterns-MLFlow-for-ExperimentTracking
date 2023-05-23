@@ -62,7 +62,7 @@ classDiagram-v2
       Model <|.. NeuralNetwork
 ```
 
-#### Fine Tunning
+#### Fine Tuner
 
 The UML diagram is shown below.
 
@@ -88,6 +88,30 @@ There are several benefits to using `MLFlow` and the `Strategy pattern` for mach
 
 On the other hand, the `Strategy pattern` allows you to easily experiment with different algorithms without having to modify the code that loads and prepares the data. This can save you time and effort when experimenting with different machine learning algorithms.
 
+#### Search Algorithm
+
+The `Search Algorithm` takes the `FineTuner` factory. The UML diagram is shown below.
+
+```mermaid
+classDiagram-v2
+    class SearchAlgorithm{
+        SearchAlgorithm: +fine_tuner FineTuner
+        SearchAlgorithm: +fit()
+      }
+
+    SearchAlgorithm ..> FineTuner
+
+    class FineTuner{
+        <<interface>>
+        FineTuner: +fine_tuner FineTuner
+        FineTuner: +fit()
+      }
+      FineTuner <|.. BayesSearchCV
+      FineTuner <|.. GridSearchCV
+      FineTuner <|.. RandomizedSearchCV
+```
+
+
 #### Pipeline
 
 The `Pipeline` takes both `factories`: `FineTuner` & `Model` concrete implementations by composition. The UML diagram is shown below.
@@ -96,12 +120,12 @@ The `Pipeline` takes both `factories`: `FineTuner` & `Model` concrete implementa
 classDiagram-v2
     class Pipeline{
         Pipeline: +model Model
-        Pipeline: +search_algo FineTuner
+        Pipeline: +search_algo SearchAlgorithm
         Pipeline: +train()
         Pipeline: -preprocess()
       }
       Pipeline ..> Model
-      Pipeline ..> FineTuner
+      Pipeline ..> SearchAlgorithm
 
     class Model{
         <<interface>>
@@ -114,9 +138,16 @@ classDiagram-v2
       Model <|.. LightGBM
       Model <|.. NeuralNetwork
 
+    class SearchAlgorithm{
+        SearchAlgorithm: +fine_tuner FineTuner
+        SearchAlgorithm: +fit()
+      }
+
+    SearchAlgorithm ..> FineTuner
+
     class FineTuner{
         <<interface>>
-        FineTuner: +search_algorithm FineTuner
+        FineTuner: +fine_tuner FineTuner
         FineTuner: +fit()
       }
       FineTuner <|.. BayesSearchCV
