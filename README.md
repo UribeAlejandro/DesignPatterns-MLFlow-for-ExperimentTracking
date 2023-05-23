@@ -103,7 +103,7 @@ classDiagram-v2
 
     class FineTuner{
         <<interface>>
-        FineTuner: +fine_tuner FineTuner
+        FineTuner: +search_algorithm FineTuner
         FineTuner: +fit()
       }
       FineTuner <|.. BayesSearchCV
