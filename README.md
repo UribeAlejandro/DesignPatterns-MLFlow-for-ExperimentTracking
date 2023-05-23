@@ -95,7 +95,7 @@ The `Search Algorithm` takes the `FineTuner` factory. The UML diagram is shown b
 ```mermaid
 classDiagram-v2
     class SearchAlgorithm{
-        SearchAlgorithm: +fine_tuner FineTuner
+        SearchAlgorithm: +search_algorithm FineTuner
         SearchAlgorithm: +fit()
       }
 
@@ -120,7 +120,7 @@ The `Pipeline` takes both `factories`: `FineTuner` & `Model` concrete implementa
 classDiagram-v2
     class Pipeline{
         Pipeline: +model Model
-        Pipeline: +search_algo SearchAlgorithm
+        Pipeline: +search_algorithm SearchAlgorithm
         Pipeline: +train()
         Pipeline: -preprocess()
       }
@@ -139,7 +139,7 @@ classDiagram-v2
       Model <|.. NeuralNetwork
 
     class SearchAlgorithm{
-        SearchAlgorithm: +fine_tuner FineTuner
+        SearchAlgorithm: +search_algorithm FineTuner
         SearchAlgorithm: +fit()
       }
 
