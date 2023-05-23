@@ -18,7 +18,7 @@ from tensorflow import Tensor
 from tensorflow.data import Dataset
 
 from src.constants import MLFLOW_TRACKING_URI, MODEL_PATH, RANDOM_STATE, SCALER_FOLDER, SCALER_PATH
-from src.training.fine_tuning import BayesSearch, FineTuner, GridSearch, RandomSearch  # noqa
+from src.training.factory.fine_tuning import FineTuner
 from src.utils.miscellaneous import set_logger
 
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
@@ -30,7 +30,7 @@ __all__ = [
     "LogisticRegressionModel",
     "RandomForestModel",
     "NeuralNetworkModel",
-    "LightgbmModel",
+    "LightGBMModel",
 ]
 
 gpu_devices = tf.config.experimental.list_physical_devices("GPU")
@@ -95,6 +95,7 @@ class Model(ABC):
         X_test: pd.DataFrame,
         y_train: pd.Series,
         y_test: pd.Series,
+        fine_tuner: FineTuner,
         **kwargs,
     ) -> None:
         """Fits the model on the given data.
@@ -112,6 +113,9 @@ class Model(ABC):
 
         y_test : pd.Series
             The target values for the test data.
+
+        fine_tuner : FineTuner
+            The search algorithm.
 
         **kwargs
             Additional keyword arguments to pass to the fitting algorithm.
@@ -158,12 +162,13 @@ class LogisticRegressionModel(Model):
         X_test: pd.DataFrame,
         y_train: pd.Series,
         y_test: pd.Series,
+        fine_tuner: FineTuner,
         **kwargs,
     ) -> None:
         mlflow.sklearn.autolog(silent=True)
         with mlflow.start_run(nested=True) as run:
             logger.info("Run ID: %s", run.info.run_id)
-            self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, **kwargs)
+            self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, fine_tuner, **kwargs)
             mlflow.log_artifact(SCALER_PATH, SCALER_FOLDER)
 
     def __scale_data(self, X: pd.DataFrame) -> pd.DataFrame:
@@ -224,19 +229,20 @@ class RandomForestModel(Model):
         X_test: pd.DataFrame,
         y_train: pd.Series,
         y_test: pd.Series,
+        fine_tuner: FineTuner,
         **kwargs,
     ) -> None:
         mlflow.sklearn.autolog(silent=True)
         with mlflow.start_run(nested=True) as run:
             logger.info("Run ID: %s", run.info.run_id)
-            self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, **kwargs)
+            self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, fine_tuner, **kwargs)
 
     @property
     def model(self) -> RandomForestClassifier:
         return self.__model
 
 
-class LightgbmModel(Model):
+class LightGBMModel(Model):
     """A concrete implementation of the Model interface that uses a LightGBM
     classifier."""
 
@@ -258,12 +264,13 @@ class LightgbmModel(Model):
         X_test: pd.DataFrame,
         y_train: pd.Series,
         y_test: pd.Series,
+        fine_tuner: FineTuner,
         **kwargs,
     ) -> None:
         mlflow.lightgbm.autolog(silent=True)
         with mlflow.start_run(nested=True) as run:
             logger.info("Run ID: %s", run.info.run_id)
-            self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, **kwargs)
+            self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, fine_tuner, **kwargs)
 
     @property
     def model(self) -> LGBMClassifier:
@@ -296,6 +303,7 @@ class NeuralNetworkModel(Model):
         X_test: pd.DataFrame,
         y_train: pd.Series,
         y_test: pd.Series,
+        fine_tuner: FineTuner,
         **kwargs,
     ) -> None:
         kwargs_fit = kwargs.get("fit", {})
@@ -454,6 +462,7 @@ def _sklearn_loop(
     X_test: pd.DataFrame,
     y_train: pd.Series,
     y_test: pd.Series,
+    fine_tuner: FineTuner,
     **kwargs,
 ) -> Model:
     """Trains a model using the scikit-learn API.
@@ -493,15 +502,13 @@ def _sklearn_loop(
     fine_tune_flag = kwargs_fine_tune.get("flag", False)
 
     param_grid = kwargs_fine_tune.get("param_grid", {})
-    strategy = kwargs_fine_tune.get("strategy", "RandomSearch")
 
     if fine_tune_flag:
         logger.info("Started: Fine tuning")
-        search_algo = eval(f"{strategy}()")
-        ft = FineTuner(search_algo)
-        ft.fit_search_algorithm(model, X_train, y_train, param_grid)
 
-        model = ft.search_algorithm.best_estimator_
+        fine_tuner.fit_search_algorithm(model, X_train, y_train, param_grid)
+        model = fine_tuner.search_algorithm.best_estimator_
+
         logger.info("Finished: Fine tuning")
     else:
         model.fit(X_train, y_train, **kwargs_fit)

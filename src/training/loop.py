@@ -7,7 +7,8 @@ from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWa
 from sklearn.model_selection import train_test_split
 
 from src.constants import RANDOM_STATE, TEST_SIZE
-from src.training.model_strategy import Model
+from src.training.factory.fine_tuning import FineTuner
+from src.training.factory.model import Model
 from src.utils.miscellaneous import set_logger
 
 warnings.simplefilter("ignore", category=NumbaDeprecationWarning)
@@ -22,19 +23,23 @@ class Pipeline:
 
     Parameters
     ----------
-    algorithm : Model
+    model : Model
         The machine learning algorithm to be used.
 
     Attributes
     ----------
     model : Model
         The trained machine learning model.
+
+    search_algorithm : FineTuner
+        Search Algorithm
     """
 
-    def __init__(self, algorithm: Model):
-        self.__algorithm = algorithm
+    def __init__(self, model: Model, search_algorithm: FineTuner):
+        self.__model = model
+        self.__search_algorithm = search_algorithm
 
-    def training_loop(self, X: pd.DataFrame, y: pd.Series, experiment_name: str, **kwargs) -> None:
+    def train(self, X: pd.DataFrame, y: pd.Series, experiment_name: str, **kwargs) -> None:
         """Train a Model's concrete implementation.
 
         Parameters
@@ -56,14 +61,19 @@ class Pipeline:
         None
         """
         logger.info("Started: Preprocess data")
+
         X_train, X_test, y_train, y_test = self.__preprocess(X, y)
+
         logger.info("Finished: Preprocess data")
 
         logger.info("Get/Create %s experiment", experiment_name)
+
         self.__search_create_experiment(experiment_name)
 
         logger.info("Started: Training")
+
         self.__train(X_train, X_test, y_train, y_test, **kwargs)
+
         logger.info("Finished: Training")
 
     def __train(
@@ -100,7 +110,7 @@ class Pipeline:
         -------
         None
         """
-        self.__algorithm.fit(X_train, X_test, y_train, y_test, **kwargs)
+        self.__model.fit(X_train, X_test, y_train, y_test, self.__search_algorithm, **kwargs)
 
     def __preprocess(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
         """Preprocesses the data.
@@ -127,7 +137,7 @@ class Pipeline:
         y_train = y_train.reset_index(drop=True)
         y_test = y_test.reset_index(drop=True)
 
-        X_train, X_test, y_train, y_test = self.__algorithm.preprocess(X_train, X_test, y_train, y_test)
+        X_train, X_test, y_train, y_test = self.__model.preprocess(X_train, X_test, y_train, y_test)
         return X_train, X_test, y_train, y_test
 
     @property
@@ -139,7 +149,18 @@ class Pipeline:
         Model
             The model.
         """
-        return self.__algorithm
+        return self.__model
+
+    @property
+    def search_algorithm(self) -> FineTuner:
+        """Returns the search algorithm.
+
+        Returns
+        -------
+        FineTuner
+            The search algorithm.
+        """
+        return self.__search_algorithm
 
     @staticmethod
     def __search_create_experiment(experiment_name: str) -> None:

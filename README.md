@@ -19,7 +19,66 @@ This project demonstrates how to use `MLFlow` and the `Strategy pattern` to spee
 ### MLFlow
 `MLFlow` is an open-source platform for managing the ML lifecycle, including experiment tracking, model packaging, and model serving. `MLFlow` can be used to track the progress of machine learning experiments, store and share models, and deploy models to production.
 
-### `Strategy Pattern`
+### Factory Pattern
+
+The `Factory Pattern` is a creational design pattern that provides an interface for creating objects of a superclass or an interface while allowing the subclasses to decide which class to instantiate. It encapsulates the object creation logic, providing a way to create objects without exposing the instantiation logic to the client.
+
+The primary goal of the `Factory Pattern` is to abstract the process of object creation, making it more flexible and easier to manage. It promotes loose coupling between the client code and the concrete classes, allowing for code that is more maintainable and extensible.
+
+The key components of the `Factory Pattern` are:
+
+- `Product`: This refers to the superclass or the interface that defines the common set of methods that the concrete classes must implement.
+- `Concrete Products`: These are the specific classes that implement the Product interface. Each concrete product provides a different implementation for the common set of methods.
+- `Factory`: This is an interface or an abstract class that declares the factory method for creating objects of the Product type. The factory method returns an instance of the Product.
+- `Concrete Factory`: These are the subclasses of the Factory that implement the factory method. Each concrete factory is responsible for creating a specific type of product.
+
+The typical flow of the `Factory Pattern` involves the following steps:
+
+1. The client code requests an object creation by invoking the factory method on the `Factory interface` or abstract class.
+2. The concrete `Factory` associated with the requested object type creates an instance of the concrete product.
+3. The concrete `Product` is returned to the client code through the factory method, but the client code is unaware of the specific class that was instantiated.
+
+By utilizing the `Factory Pattern`, you can centralize the object creation logic and decouple the client code from the specific implementation classes. This makes it easier to introduce new types of products or modify the existing ones without modifying the client code.
+
+Overall, the `Factory Pattern` provides a flexible and extensible way to create objects, promoting code re-usability, maintainability, and separation of concerns.
+
+The following diagram shows the `Factories` which have been implemented in the current project.
+
+#### Model
+
+The UML diagram is shown below.
+
+```mermaid
+classDiagram-v2
+      class Model{
+        <<interface>>
+        Model: +model Model
+        Model: +preprocess()
+        Model: +fit()
+      }
+      Model <|.. LogisticRegression
+      Model <|.. RandomForest
+      Model <|.. LightGBM
+      Model <|.. NeuralNetwork
+```
+
+#### Fine Tunning
+
+The UML diagram is shown below.
+
+```mermaid
+classDiagram-v2
+      class FineTuner{
+        <<interface>>
+        FineTuner: +search_algorithm FineTuner
+        FineTuner: +fit()
+      }
+      FineTuner <|.. BayesSearchCV
+      FineTuner <|.. GridSearchCV
+      FineTuner <|.. RandomizedSearchCV
+```
+
+### Strategy Pattern
 The `Strategy pattern` is a design pattern that allows you to decouple the algorithm from the context in which it is used. This can be useful for machine learning experimentation, as it allows you to easily experiment with different algorithms without having to modify the code that loads and prepares the data.
 
 Benefits of Using `MLFlow` and the `Strategy Pattern`
@@ -29,8 +88,44 @@ There are several benefits to using `MLFlow` and the `Strategy pattern` for mach
 
 On the other hand, the `Strategy pattern` allows you to easily experiment with different algorithms without having to modify the code that loads and prepares the data. This can save you time and effort when experimenting with different machine learning algorithms.
 
+#### Pipeline
+
+The `Pipeline` takes both `factories`: `FineTuner` & `Model` concrete implementations by composition. The UML diagram is shown below.
+
+```mermaid
+classDiagram-v2
+    class Pipeline{
+        Pipeline: +model Model
+        Pipeline: +search_algo FineTuner
+        Pipeline: +train()
+        Pipeline: -preprocess()
+      }
+      Pipeline ..> Model
+      Pipeline ..> FineTuner
+
+    class Model{
+        <<interface>>
+        Model: +model Model
+        Model: +preprocess()
+        Model: +fit()
+      }
+      Model <|.. LogisticRegression
+      Model <|.. RandomForest
+      Model <|.. LightGBM
+      Model <|.. NeuralNetwork
+
+    class FineTuner{
+        <<interface>>
+        FineTuner: +search_algorithm FineTuner
+        FineTuner: +fit()
+      }
+      FineTuner <|.. BayesSearchCV
+      FineTuner <|.. GridSearchCV
+      FineTuner <|.. RandomizedSearchCV
+```
+
 ### Requirements
-To use this project, you will need to have `Python 3.9` or later, and install the following dependencies.
+To use this project, you will need to have `Python 3.9` or greater, and install the following dependencies.
 
 ```bash
 pip install -r requirements_dev.txt
