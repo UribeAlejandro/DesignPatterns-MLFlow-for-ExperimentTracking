@@ -493,19 +493,14 @@ def _sklearn_loop(
         The trained model.
     """
     kwargs_fit = kwargs.get("fit", {})
-
     kwargs_evaluate = kwargs.get("evaluate", {})
     evaluate_flag = kwargs_evaluate.get("flag", False)
-    evaluator_config = kwargs_evaluate.get("evaluator_config")
 
-    kwargs_fine_tune = kwargs.get("fine_tune", {})
-    fine_tune_flag = kwargs_fine_tune.get("flag", False)
-
-    param_grid = kwargs_fine_tune.get("param_grid", {})
-
-    if fine_tune_flag:
+    if fine_tuner:
         logger.info("Started: Fine tuning")
 
+        kwargs_fine_tune = kwargs.get("fine_tune", {})
+        param_grid = kwargs_fine_tune.get("param_grid", {})
         fine_tuner.fit_search_algorithm(model, X_train, y_train, param_grid)
         model = fine_tuner.search_algorithm.best_estimator_
 
@@ -514,6 +509,9 @@ def _sklearn_loop(
         model.fit(X_train, y_train, **kwargs_fit)
 
     if evaluate_flag:
+        logger.info("Started: Evaluation")
+
+        evaluator_config = kwargs_evaluate.get("evaluator_config")
         eval_data = X_test.copy()
         eval_data["target"] = y_test.copy()
 
@@ -527,5 +525,7 @@ def _sklearn_loop(
             evaluators="default",
             evaluator_config=evaluator_config,
         )
+
+        logger.info("Finished: Evaluation")
 
     return model
