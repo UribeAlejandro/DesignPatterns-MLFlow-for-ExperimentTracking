@@ -5,22 +5,27 @@ import yaml
 from yaml import SafeLoader
 
 from src.data.etl import etl_pipeline
-from src.training.factory.FineTuner import BayesSearch, GridSearch, RandomSearch  # noqa
-from src.training.factory.Model import (  # noqa
-    LightGBMModel,
-    LogisticRegressionModel,
-    NeuralNetworkModel,
-    RandomForestModel,
-)
-from src.training.strategy.search_algorithm import SearchAlgorithm
 from src.training.strategy.training import Pipeline
-from src.utils.miscellaneous import create_parser, set_logger
+from src.utils.cli import create_parser, set_logger
+from src.utils.object_creation import create_fine_tuner, create_model
 
 plt.switch_backend("agg")
 
-if __name__ == "__main__":
+
+def main():
+    """Main entry point for the script. It parses the command line arguments,
+    loads the configuration file, and trains the models.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
     logger = set_logger(__name__)
-    logger.info("Started")
+    logger.info("Started: Training Loop")
 
     parser = create_parser()
     args = parser.parse_args()
@@ -35,36 +40,24 @@ if __name__ == "__main__":
         config_dict = yaml.load(f, Loader=SafeLoader)
 
     logger.info("Started: ETL")
-
     features, labels = etl_pipeline(dataset_id, data_home, output_path)
-
     logger.info("Finished: ETL")
 
     logger.info("Started: Training Loop")
-
     for model_name, kwargs in config_dict.items():
-        kwargs_creation = kwargs.get("creation", {})
-        kwargs_fine_tune = kwargs.get("fine_tune", {})
-        fine_tune_flag = kwargs_fine_tune.get("flag", False)
-        try:
-            model = eval(f"{model_name}(**kwargs_creation)")
-        except Exception as e:
-            logger.error("%s is not implemented", model_name)
-            raise NotImplementedError(e)
+        logger.info("Model object creation")
+        model = create_model(model_name, **kwargs)
 
-        if fine_tune_flag:
-            param_grid = kwargs_fine_tune.get("param_grid", {})
-            strategy = kwargs_fine_tune.get("strategy", "RandomSearch")
-            search_algo = eval(f"{strategy}()")
-            fine_tuner = SearchAlgorithm(search_algo)
-        else:
-            fine_tuner = None
+        logger.info("Fine-tune object creation")
+        fine_tuner, kwargs = create_fine_tuner(**kwargs)
 
         logger.info("Started: Training Loop - %s", model_name)
-
         training_pipe = Pipeline(model, fine_tuner)
         training_pipe.train(features, labels, experiment_name, **kwargs)
-
         logger.info("Finished: Training Loop - %s", model_name)
 
     logger.info("Finished: Training Loop")
+
+
+if __name__ == "__main__":
+    main()

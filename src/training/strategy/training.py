@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 from src.constants import MLFLOW_ARTIFACT_ROOT, RANDOM_STATE, TEST_SIZE
 from src.training.factory.Model import Model
 from src.training.strategy.search_algorithm import SearchAlgorithm
-from src.utils.miscellaneous import set_logger
+from src.utils.cli import set_logger
 
 warnings.simplefilter("ignore", category=NumbaDeprecationWarning)
 warnings.simplefilter("ignore", category=NumbaPendingDeprecationWarning)
@@ -164,8 +164,8 @@ class Pipeline:
 
     @staticmethod
     def __search_create_experiment(experiment_name: str) -> None:
-        """Searches for an experiment with the given name and creates it if it
-        does not exist.
+        """Searches for a MLFlow experiment with the given name and creates it
+        if it does not exist.
 
         Parameters
         ----------

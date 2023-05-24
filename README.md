@@ -97,20 +97,17 @@ classDiagram-v2
     class SearchAlgorithm{
         SearchAlgorithm: +search_algorithm FineTuner
         SearchAlgorithm: +fit()
-      }
-
-    SearchAlgorithm ..> FineTuner
-
+    }
     class FineTuner{
         <<interface>>
         FineTuner: +search_algorithm FineTuner
         FineTuner: +fit()
-      }
-      FineTuner <|.. BayesSearchCV
-      FineTuner <|.. GridSearchCV
-      FineTuner <|.. RandomizedSearchCV
+    }
+    SearchAlgorithm ..> FineTuner
+    FineTuner <|.. BayesSearchCV
+    FineTuner <|.. GridSearchCV
+    FineTuner <|.. RandomizedSearchCV
 ```
-
 
 #### Pipeline
 
@@ -123,36 +120,36 @@ classDiagram-v2
         Pipeline: +search_algorithm SearchAlgorithm
         Pipeline: +train()
         Pipeline: -preprocess()
-      }
-      Pipeline ..> Model
-      Pipeline ..> SearchAlgorithm
-
+    }
     class Model{
         <<interface>>
         Model: +model Model
         Model: +preprocess()
         Model: +fit()
-      }
-      Model <|.. LogisticRegression
-      Model <|.. RandomForest
-      Model <|.. LightGBM
-      Model <|.. NeuralNetwork
-
+    }
     class SearchAlgorithm{
         SearchAlgorithm: +search_algorithm FineTuner
         SearchAlgorithm: +fit()
-      }
-
-    SearchAlgorithm ..> FineTuner
-
+    }
     class FineTuner{
         <<interface>>
         FineTuner: +search_algorithm FineTuner
         FineTuner: +fit()
-      }
-      FineTuner <|.. BayesSearchCV
-      FineTuner <|.. GridSearchCV
-      FineTuner <|.. RandomizedSearchCV
+    }
+
+    Pipeline ..> Model
+    Pipeline ..> SearchAlgorithm
+
+    Model <|.. LogisticRegression
+    Model <|.. RandomForest
+    Model <|.. LightGBM
+    Model <|.. NeuralNetwork
+
+    SearchAlgorithm ..> FineTuner
+
+    FineTuner <|.. BayesSearchCV
+    FineTuner <|.. GridSearchCV
+    FineTuner <|.. RandomizedSearchCV
 ```
 
 ### Requirements
@@ -171,7 +168,7 @@ export MLFLOW_TRACKING_URI=sqlite:///database/mlruns.db &&
 mlflow server --backend-store-uri=$MLFLOW_TRACKING_URI --default-artifact-root=file:$MLFLOW_ARTIFACT_ROOT --host 0.0.0.0 --port $MLFLOW_PORT
 ```
 
-Modify `data/config/config.yaml` according to your needs. Then, you can start a training loop as follows:
+Modify `config/config.yaml` according to your needs. Then, you can start a training loop as follows:
 
 ```bash
 python -m src.main [options]
@@ -194,17 +191,121 @@ options:
                         MLFlow's experiment name
 ```
 
-The project will then load the `Higgs` dataset, train a model, and track the experiment using `MLFlow`. You can then view the results of the experiment in the `MLFlow UI` as follows:
-
-```bash
-mlflow ui
-```
+The project will then load the `Higgs` dataset, train a model, and track the experiment using `MLFlow`. You can then view the results of the experiment in the `MLFlow UI` in your web browser in [localhost](http://0.0.0.0:5000/)
 
 ## Conclusion
+
 This project demonstrates how to use `MLFlow`, the `Strategy pattern`, and the `Factory pattern` to speed up machine learning experimentation. `MLFlow` provides a powerful framework for managing experiments, tracking model performance, and sharing models with others. The `Strategy pattern` allows for flexible and interchangeable strategies for fine-tuning machine learning models. Additionally, the `Factory pattern` facilitates the creation of these strategies without exposing the instantiation logic to the client code.
 
-By combining `MLFlow`, the S`trategy pattern`, and the `Factory pattern`, you can effectively manage and optimize your machine learning workflows. `MLFlow` enables easy experiment tracking and model management, while the `Strategy pattern` and the `Factory pattern` provide a structured approach to fine-tuning models and encapsulating object creation logic.
+By combining `MLFlow`, the `Strategy pattern`, and the `Factory pattern`, you can effectively manage and optimize your machine learning workflows. `MLFlow` enables easy experiment tracking and model management, while the `Strategy pattern` and the `Factory pattern` provide a structured approach to fine-tuning models and encapsulating object creation logic.
 
 This approach empowers data scientists and machine learning engineers to iterate quickly, compare different strategies, and make informed decisions based on experiment results. Furthermore, the modularity and extensibility offered by the `Strategy pattern` and the `Factory pattern` make it easier to incorporate new fine-tuning strategies or modify existing ones without impacting the overall system.
 
 In summary, leveraging MLFlow, the Strategy pattern, and the Factory pattern can greatly enhance the efficiency and effectiveness of machine learning experimentation, model management, and deployment processes.
+
+## Future work
+
+In order to enhance the existing system, the future work will involve implementing two additional `Factory patterns`: `FeatureEnricher` and `Dataset`. These new patterns will complement the already present `Strategy Pattern`, consisting of the `Pipeline` and `SearchAlgorithm`, which includes the `Model` and `FineTuner` factories, respectively.
+
+### Dataset Factory
+
+The `Dataset` Factory will facilitate the collection of data used for training or evaluating machine learning models. By utilizing the `Dataset` Factory, we can abstract away the creation details and handle the creation of various types of datasets, such as image datasets, text datasets, or audio datasets, with ease. Also, will facilitate switching between datasets such as `Iris`, `Higgs`, `Wine`, between others. The UML diagram is shown below:
+
+```mermaid
+classDiagram-v2
+    class Dataset{
+        <<interface>>
+        Dataset: +read()
+        Dataset: +train_test_split()
+    }
+
+    Dataset <|.. IrisDataset : implements
+    Dataset <|.. HiggsDataset : implements
+    Dataset <|.. WineDataset : implements
+```
+
+
+### Feature Enricher Factory
+
+Similarly, the `FeatureEnricher` factory will provide a flexible way to processes and enrich the input data with additional features before it is fed into the `Pipeline`. By employing the `FeatureEnricher`, we can encapsulate the creation logic and easily switch between different enricher implementations (such as `LogTransformation`) based on specific requirements or configurations. The UML diagram is shown below:
+
+```mermaid
+classDiagram-v2
+    class FeatureEnricher{
+        <<interface>>
+        FeatureEnricher: +read()
+        FeatureEnricher: +train_test_split()
+    }
+    FeatureEnricher <|.. LogTransformation
+    FeatureEnricher <|.. ZScale
+    FeatureEnricher <|.. Automated
+```
+
+### Final System
+
+These new factory patterns will seamlessly integrate with the existing `Strategy Pattern`, which already includes the `Pipeline` and `SearchAlgorithm` strategies. The `Pipeline` strategy defines the pipeline of operations to be applied to the training data and subsequent training. On the other hand, the `SearchAlgorithm` encapsulates the algorithmic choices for performing hyperparameter search and optimization of the `Model` at hand.
+
+By incorporating the `FeatureEnricher` and `Dataset` factories alongside the existing `Strategy pattern` and `Factory Pattern`, the system will gain increased `modularity`, `extensibility`, and `maintainability`.
+
+A proposed final product is shown below:
+
+```mermaid
+classDiagram-v2
+    class Pipeline{
+        Pipeline: +dataset Dataset
+        Pipeline: +feature_enricher FeatureEnricher
+        Pipeline: +model Model
+        Pipeline: +search_algorithm SearchAlgorithm
+        Pipeline: +train()
+        Pipeline: -preprocess()
+    }
+
+    class Dataset{
+        <<interface>>
+        Dataset: +read()
+        Dataset: +train_test_split()
+
+    }
+
+    class FeatureEnricher{
+        <<interface>>
+        FeatureEnricher: +read()
+        FeatureEnricher: +train_test_split()
+
+    }
+
+    class Model{
+        <<interface>>
+        Model: +model Model
+        Model: +preprocess()
+        Model: +fit()
+    }
+
+    class SearchAlgorithm{
+        SearchAlgorithm: +search_algorithm FineTuner
+        SearchAlgorithm: +fit()
+      }
+
+    class FineTuner{
+        <<interface>>
+        FineTuner: +search_algorithm FineTuner
+        FineTuner: +fit()
+    }
+
+
+    Pipeline ..> Dataset : has a
+    Pipeline ..> FeatureEnricher : has a
+    Pipeline ..> Model : has a
+    Pipeline ..> SearchAlgorithm : has a
+
+    SearchAlgorithm ..> FineTuner : has a
+
+    Dataset <|.. ConcreteDataset : implements
+
+    FeatureEnricher <|.. ConcreteFeatureEnricher : implements
+
+    Model <|.. ConcreteModel : implements
+
+    FineTuner <|.. Concrete FineTuner : implements
+
+```

@@ -3,6 +3,19 @@ from argparse import ArgumentParser
 
 
 def create_parser() -> ArgumentParser:
+    """This function creates an ArgumentParser object with the following
+    arguments:
+
+    -f, --filepath: Path to configuration file.
+    -d, --dataset: Dataset name.
+    -l, --location: Folder to store data.
+    -e, --experiment_name: MLFlow's experiment name.
+
+    Returns
+    ------
+    ArgumentParser
+        The ArgumentParser object.
+    """
     parser = ArgumentParser()
     parser.add_argument(
         "-f",
@@ -35,6 +48,19 @@ def create_parser() -> ArgumentParser:
 
 
 def set_logger(name: str) -> logging.Logger:
+    """This function sets up a logger with the given name. The logger will
+    write messages to the console.
+
+    Parameters
+    ----------
+    name : str
+        The name of the logger.
+
+    Returns
+    -------
+    logging.Logger
+        The logger object.
+    """
     logger = logging.Logger(name)
     handler = logging.StreamHandler()
     h_format = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pickle
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import mlflow
 import numpy as np
@@ -15,15 +15,22 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from tensorflow import Tensor
-from tensorflow.data import Dataset
+from tensorflow.python.data.ops.dataset_ops import DatasetV1Adapter
 
-from src.constants import MLFLOW_TRACKING_URI, MODEL_PATH, RANDOM_STATE, SCALER_FOLDER, SCALER_PATH
+from src.constants import (
+    BATCH_SIZE,
+    BUFFER_SIZE,
+    MLFLOW_TRACKING_URI,
+    MODEL_PATH,
+    RANDOM_STATE,
+    SCALER_FOLDER,
+    SCALER_PATH,
+)
 from src.training.strategy.search_algorithm import SearchAlgorithm
-from src.utils.miscellaneous import set_logger
+from src.utils.cli import set_logger
 
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
-logger = set_logger(__name__)
 
 __all__ = [
     "Model",
@@ -32,6 +39,7 @@ __all__ = [
     "NeuralNetworkModel",
     "LightGBMModel",
 ]
+logger = set_logger(__name__)
 
 gpu_devices = tf.config.experimental.list_physical_devices("GPU")
 for device in gpu_devices:
@@ -124,7 +132,7 @@ class Model(ABC):
 
     @property
     @abstractmethod
-    def model(self) -> Model:
+    def model(self) -> Union[LogisticRegression, RandomForestClassifier, LightGBMModel, Sequential]:
         """Returns the underlying model.
 
         Returns
@@ -171,6 +179,21 @@ class LogisticRegressionModel(Model):
             self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, fine_tuner, **kwargs)
             mlflow.log_artifact(SCALER_PATH, SCALER_FOLDER)
 
+    @property
+    def model(self) -> LogisticRegression:
+        return self.__model
+
+    @property
+    def scaler(self) -> StandardScaler:
+        """Returns the underlying scaler.
+
+        Returns
+        -------
+        StandardScaler
+            Underlying scaler.
+        """
+        return self.__scaler
+
     def __scale_data(self, X: pd.DataFrame) -> pd.DataFrame:
         """Z-scales data.
 
@@ -190,21 +213,6 @@ class LogisticRegressionModel(Model):
             pickle.dump(self.__scaler, file)
 
         return X
-
-    @property
-    def model(self) -> LogisticRegression:
-        return self.__model
-
-    @property
-    def scaler(self) -> StandardScaler:
-        """Returns the underlying scaler.
-
-        Returns
-        -------
-        StandardScaler
-            Underlying scaler.
-        """
-        return self.__scaler
 
 
 class RandomForestModel(Model):
@@ -310,15 +318,116 @@ class NeuralNetworkModel(Model):
         kwargs_creation = kwargs.get("creation", {})
         kwargs_compilation = kwargs.get("compilation", {})
 
+        X_train, X_test, y_train, y_test = self.__create_tensors(X_train, X_test, y_train, y_test)
+        training_batches, test_batches = self.__create_datasets(X_train, X_test, y_train, y_test)
+
         model = self.__create_model(X_train, **kwargs_creation)
         model = self.__compile_model(model, **kwargs_compilation)
-        training_batches, test_batches = self.__create_datasets(X_train, X_test, y_train, y_test)
 
         mlflow.tensorflow.autolog(silent=True)
         with mlflow.start_run(nested=True) as run:
             logger.info("Run ID: %s", run.info.run_id)
             self.__model = model.fit(training_batches, validation_data=test_batches, **kwargs_fit)
             mlflow.log_artifact(SCALER_PATH, SCALER_FOLDER)
+
+    @property
+    def model(self) -> LogisticRegression:
+        return self.__model
+
+    @property
+    def scaler(self) -> StandardScaler:
+        """Returns the underlying scaler.
+
+        Returns
+        -------
+        StandardScaler
+            Underlying scaler.
+        """
+        return self.__scaler
+
+    def __scale_data(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Z-scales data.
+
+        Parameters
+        ----------
+        X : pd.DataFrame
+            Data to be scaled.
+
+        Returns
+        -------
+        pd.DataFrame
+            Scaled data.
+        """
+        X = self.__scaler.fit_transform(X)
+
+        with open(SCALER_PATH, "wb") as file:
+            pickle.dump(self.__scaler, file)
+
+        return X
+
+    @staticmethod
+    def __create_tensors(
+        X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series
+    ) -> Tuple[Tensor, Tensor, np.ndarray, np.ndarray]:
+        """This function creates tensors from the given Pandas DataFrames and
+        Series.
+
+        Parameters
+        ----------
+        X_train : pd.DataFrame
+            The training data.
+        X_test : pd.DataFrame
+            The test data.
+        y_train : pd.Series
+            The training labels.
+        y_test : pd.Series
+            The test labels.
+
+        Returns
+        -------
+        Tuple[Tensor, Tensor, np.ndarray, np.ndarray]
+            A tuple of tensors containing the training and test data and labels.
+        """
+        X_train = tf.convert_to_tensor(X_train)
+        X_test = tf.convert_to_tensor(X_test)
+
+        y_train = np.asarray(y_train).astype("uint8").reshape((-1, 1))
+        y_test = np.asarray(y_test).astype("uint8").reshape((-1, 1))
+
+        return X_train, X_test, y_train, y_test
+
+    @staticmethod
+    def __create_datasets(
+        X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: np.ndarray, y_test: np.ndarray
+    ) -> Tuple[DatasetV1Adapter, DatasetV1Adapter]:
+        """Create tensorflow datasets for training and testing.
+
+        Parameters
+        ----------
+        X_train : pd.DataFrame
+            The training data.
+
+        X_test : pd.DataFrame
+            The test data.
+
+        y_train : pd.Series
+            The target values for the training data.
+
+        y_test : pd.Series
+            The target values for the test data.
+
+        Returns
+        -------
+        Tuple[Dataset, Dataset]
+            Datasets.
+        """
+        training_ds = tf.data.Dataset.from_tensor_slices((X_train, y_train))
+        test_ds = tf.data.Dataset.from_tensor_slices((X_test, y_test))
+
+        training_batches = training_ds.shuffle(BUFFER_SIZE, seed=RANDOM_STATE).batch(BATCH_SIZE)
+        test_batches = test_ds.shuffle(BUFFER_SIZE, seed=RANDOM_STATE).batch(BATCH_SIZE)
+
+        return training_batches, test_batches
 
     @staticmethod
     def __create_model(
@@ -381,90 +490,16 @@ class NeuralNetworkModel(Model):
         model.compile(*args, **kwargs)
         return model
 
-    def __scale_data(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Z-scales data.
-
-        Parameters
-        ----------
-        X : pd.DataFrame
-            Data to be scaled.
-
-        Returns
-        -------
-        pd.DataFrame
-            Scaled data.
-        """
-        X = self.__scaler.fit_transform(X)
-
-        with open(SCALER_PATH, "wb") as file:
-            pickle.dump(self.__scaler, file)
-
-        return X
-
-    @staticmethod
-    def __create_datasets(
-        X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series, batch_size: int = 32
-    ) -> Tuple[Dataset, Dataset]:
-        """Create tensorflow datasets for training and testing.
-
-        Parameters
-        ----------
-        X_train : pd.DataFrame
-            The training data.
-
-        X_test : pd.DataFrame
-            The test data.
-
-        y_train : pd.Series
-            The target values for the training data.
-
-        y_test : pd.Series
-            The target values for the test data.
-
-        Returns
-        -------
-        Tuple[Dataset, Dataset]
-            Datasets.
-        """
-        X_train = tf.convert_to_tensor(X_train)
-        X_test = tf.convert_to_tensor(X_test)
-
-        y_train = np.asarray(y_train).astype("float32").reshape((-1, 1))
-        y_test = np.asarray(y_test).astype("float32").reshape((-1, 1))
-
-        training_ds = tf.data.Dataset.from_tensor_slices((X_train, y_train))
-        test_ds = tf.data.Dataset.from_tensor_slices((X_test, y_test))
-
-        training_batches = training_ds.shuffle(1000).batch(batch_size)
-        test_batches = test_ds.shuffle(1000).batch(batch_size)
-
-        return training_batches, test_batches
-
-    @property
-    def model(self) -> LogisticRegression:
-        return self.__model
-
-    @property
-    def scaler(self) -> StandardScaler:
-        """Returns the underlying scaler.
-
-        Returns
-        -------
-        StandardScaler
-            Underlying scaler.
-        """
-        return self.__scaler
-
 
 def _sklearn_loop(
-    model: Any,
+    model: Union[LogisticRegression, RandomForestClassifier, LightGBMModel, Sequential],
     X_train: pd.DataFrame,
     X_test: pd.DataFrame,
     y_train: pd.Series,
     y_test: pd.Series,
     fine_tuner: SearchAlgorithm,
     **kwargs,
-) -> Model:
+) -> Union[LogisticRegression, RandomForestClassifier, LightGBMModel, Sequential]:
     """Trains a model using the scikit-learn API.
 
     Parameters

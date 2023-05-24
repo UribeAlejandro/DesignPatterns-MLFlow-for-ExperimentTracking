@@ -7,7 +7,7 @@ from pandas import DataFrame, Series, concat, read_parquet
 from sklearn.datasets import fetch_openml
 from sklearn.impute import SimpleImputer
 
-from src.utils.miscellaneous import set_logger
+from src.utils.cli import set_logger
 
 __all__ = ["etl_pipeline", "extract_data", "transform_data", "load_data"]
 logger = set_logger(__name__)
