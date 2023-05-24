@@ -61,19 +61,14 @@ class Pipeline:
         None
         """
         logger.info("Started: Preprocess data")
-
         X_train, X_test, y_train, y_test = self.__preprocess(X, y)
-
         logger.info("Finished: Preprocess data")
 
         logger.info("Get/Create %s experiment", experiment_name)
-
         self.__search_create_experiment(experiment_name)
 
         logger.info("Started: Training")
-
         self.__train(X_train, X_test, y_train, y_test, **kwargs)
-
         logger.info("Finished: Training")
 
     def __train(

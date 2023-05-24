@@ -150,6 +150,7 @@ class LogisticRegressionModel(Model):
     def __init__(self, *args, **kwargs):
         self.__scaler = StandardScaler()
         self.__model = LogisticRegression(random_state=RANDOM_STATE, n_jobs=-1, *args, **kwargs)
+        self.__tags = {}
 
     def preprocess(
         self,
@@ -159,7 +160,6 @@ class LogisticRegressionModel(Model):
         y_test: pd.Series,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
         X_train_scaled = pd.DataFrame(self.__scale_data(X_train), columns=X_train.columns)
-
         X_test_scaled = pd.DataFrame(self.__scaler.transform(X_test), columns=X_test.columns)
 
         return X_train_scaled, X_test_scaled, y_train, y_test
@@ -175,9 +175,13 @@ class LogisticRegressionModel(Model):
     ) -> None:
         mlflow.sklearn.autolog(silent=True)
         with mlflow.start_run(nested=True) as run:
+            mlflow.set_tags(self.__tags)
             logger.info("Run ID: %s", run.info.run_id)
             self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, fine_tuner, **kwargs)
             mlflow.log_artifact(SCALER_PATH, SCALER_FOLDER)
+
+            self.__tags["model_class"] = self.__model.__class__
+            mlflow.set_tags(self.__tags)
 
     @property
     def model(self) -> LogisticRegression:
@@ -212,6 +216,8 @@ class LogisticRegressionModel(Model):
         with open(SCALER_PATH, "wb") as file:
             pickle.dump(self.__scaler, file)
 
+        self.__tags["scaler_class"] = self.__scaler.__class__
+
         return X
 
 
@@ -221,6 +227,7 @@ class RandomForestModel(Model):
 
     def __init__(self, *args, **kwargs):
         self.__model = RandomForestClassifier(random_state=RANDOM_STATE, n_jobs=-1, *args, **kwargs)
+        self.__tags = {}
 
     def preprocess(
         self,
@@ -245,6 +252,9 @@ class RandomForestModel(Model):
             logger.info("Run ID: %s", run.info.run_id)
             self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, fine_tuner, **kwargs)
 
+            self.__tags["model_class"] = self.__model.__class__
+            mlflow.set_tags(self.__tags)
+
     @property
     def model(self) -> RandomForestClassifier:
         return self.__model
@@ -256,6 +266,7 @@ class LightGBMModel(Model):
 
     def __init__(self, *args, **kwargs):
         self.__model = LGBMClassifier(random_state=RANDOM_STATE, n_jobs=-1, *args, **kwargs)
+        self.__tags = {}
 
     def preprocess(
         self,
@@ -280,6 +291,9 @@ class LightGBMModel(Model):
             logger.info("Run ID: %s", run.info.run_id)
             self.__model = _sklearn_loop(self.__model, X_train, X_test, y_train, y_test, fine_tuner, **kwargs)
 
+            self.__tags["model_class"] = self.__model.__class__
+            mlflow.set_tags(self.__tags)
+
     @property
     def model(self) -> LGBMClassifier:
         return self.__model
@@ -292,6 +306,7 @@ class NeuralNetworkModel(Model):
     def __init__(self, *args, **kwargs):
         self.__model: Sequential = None
         self.__scaler = StandardScaler()
+        self.__tags = {}
 
     def preprocess(
         self,
@@ -330,6 +345,9 @@ class NeuralNetworkModel(Model):
             self.__model = model.fit(training_batches, validation_data=test_batches, **kwargs_fit)
             mlflow.log_artifact(SCALER_PATH, SCALER_FOLDER)
 
+            self.__tags["model_class"] = self.__model.__class__
+            mlflow.set_tags(self.__tags)
+
     @property
     def model(self) -> LogisticRegression:
         return self.__model
@@ -362,6 +380,8 @@ class NeuralNetworkModel(Model):
 
         with open(SCALER_PATH, "wb") as file:
             pickle.dump(self.__scaler, file)
+
+        self.__tags["scaler_class"] = self.__scaler.__class__
 
         return X
 
@@ -533,12 +553,10 @@ def _sklearn_loop(
 
     if fine_tuner:
         logger.info("Started: Fine tuning")
-
         kwargs_fine_tune = kwargs.get("fine_tune", {})
         param_grid = kwargs_fine_tune.get("param_grid", {})
         fine_tuner.fit_search_algorithm(model, X_train, y_train, param_grid)
         model = fine_tuner.search_algorithm.best_estimator_
-
         logger.info("Finished: Fine tuning")
     else:
         model.fit(X_train, y_train, **kwargs_fit)
