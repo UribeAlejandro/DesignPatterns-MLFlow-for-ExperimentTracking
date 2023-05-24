@@ -1,17 +1,17 @@
-#LogisticRegressionModel:
-#  evaluate:
-#    flag: True
-#    evaluator_config:
-#      explainability_algorithm: permutation
-#      metric_prefix: evaluation_
-#  fine_tune:
-#    flag: True
-#    strategy: BayesSearch
-#    param_grid:
-#      penalty: Categorical( [ 'l1', 'l2' ] )
-#      C: Real( 1e-04, 1e+04 )
-#      solver: Categorical( [ 'saga', 'liblinear' ] )
-#      tol: Real( 1e-04, 1e-01 )
+LogisticRegressionModel:
+  evaluate:
+    flag: True
+    evaluator_config:
+      explainability_algorithm: permutation
+      metric_prefix: evaluation_
+  fine_tune:
+    flag: True
+    strategy: BayesSearch
+    param_grid:
+      penalty: Categorical( [ 'l1', 'l2' ] )
+      C: Real( 1e-04, 1e+04 )
+      solver: Categorical( [ 'saga', 'liblinear' ] )
+      tol: Real( 1e-04, 1e-01 )
 
 RandomForestModel:
   evaluate:
