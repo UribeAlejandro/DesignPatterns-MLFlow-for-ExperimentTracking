@@ -45,7 +45,7 @@ def main():
 
     logger.info("Started: Training Loop")
     for model_name, kwargs in config_dict.items():
-        logger.info("Model object creation")
+        logger.info("Model object creation: %s", model_name)
         model = create_model(model_name, **kwargs)
 
         logger.info("Fine-tune object creation")
