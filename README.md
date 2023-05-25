@@ -52,7 +52,6 @@ The UML diagram is shown below.
 classDiagram-v2
       class Model{
         <<interface>>
-        Model: +model Model
         Model: +preprocess()
         Model: +fit()
       }
@@ -70,7 +69,6 @@ The UML diagram is shown below.
 classDiagram-v2
       class FineTuner{
         <<interface>>
-        FineTuner: +search_algorithm FineTuner
         FineTuner: +fit()
       }
       FineTuner <|.. BayesSearchCV
@@ -95,12 +93,11 @@ The `Search Algorithm` takes the `FineTuner` factory. The UML diagram is shown b
 ```mermaid
 classDiagram-v2
     class SearchAlgorithm{
-        SearchAlgorithm: +search_algorithm FineTuner
+        SearchAlgorithm: +fine_tuner FineTuner
         SearchAlgorithm: +fit()
     }
     class FineTuner{
         <<interface>>
-        FineTuner: +search_algorithm FineTuner
         FineTuner: +fit()
     }
     SearchAlgorithm ..> FineTuner
@@ -123,17 +120,15 @@ classDiagram-v2
     }
     class Model{
         <<interface>>
-        Model: +model Model
         Model: +preprocess()
         Model: +fit()
     }
     class SearchAlgorithm{
-        SearchAlgorithm: +search_algorithm FineTuner
+        SearchAlgorithm: +finetuner FineTuner
         SearchAlgorithm: +fit()
     }
     class FineTuner{
         <<interface>>
-        FineTuner: +search_algorithm FineTuner
         FineTuner: +fit()
     }
 
@@ -276,19 +271,17 @@ classDiagram-v2
 
     class Model{
         <<interface>>
-        Model: +model Model
         Model: +preprocess()
         Model: +fit()
     }
 
     class SearchAlgorithm{
-        SearchAlgorithm: +search_algorithm FineTuner
+        SearchAlgorithm: +finetuner FineTuner
         SearchAlgorithm: +fit()
       }
 
     class FineTuner{
         <<interface>>
-        FineTuner: +search_algorithm FineTuner
         FineTuner: +fit()
     }
 
@@ -307,5 +300,4 @@ classDiagram-v2
     Model <|.. ConcreteModel : implements
 
     FineTuner <|.. Concrete FineTuner : implements
-
 ```
