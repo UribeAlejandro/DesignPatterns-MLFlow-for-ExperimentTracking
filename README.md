@@ -1,4 +1,6 @@
-# Speed up Training with MLFlow and Strategy Pattern
+# OOPs Design Patterns did it again!
+
+Speed up Machine Learning model training with MLFlow and Object-Oriented-Programming Design Patterns. 
 
 ## Data
 
